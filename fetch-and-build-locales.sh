@@ -124,7 +124,7 @@ compile_locales()
          # that glibc hasn't silently truncated a modifier used when opening
          # the locale, which is otherwise undetectable via POSIX APIs.
          locale_input_rev="$locale_input.rev"
-         sed "s/^\(revision *\".*\)\"$/\1; distribution=$distribution; localedef=$localedef_version; locales=$version\"/" < $locale_input > $locale_input_rev
+         sed "s/^\(revision *\".*\)\"$/\1; distribution=$distribution; localedef=$localedef_version; localedata=$version\"/" < $locale_input > $locale_input_rev
 
          I18NPATH="$work/$distribution/fakeroot/usr/share/i18n" localedef -f "$charmap_input" -i "$locale_input_rev" "$locale_path.tmp"
          mv "$locale_path.tmp" "$locale_path"
