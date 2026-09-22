@@ -21,9 +21,10 @@ fetch_src()
 
 	if [ ! -e "$dst_path" ] ; then
 		mkdir -p "$dst_dir"
-		echo "Fetching $src_url..."
+		printf "$distribution: fetching $src_path...\r"
 		curl -f -s -S "$src_url" > "$dst_path.tmp"
 		mv "$dst_path.tmp" "$dst_path"
+		printf '\033[K'
 	fi
 }
 
@@ -44,55 +45,17 @@ symlink_modifiers()
 	mkdir -p "$vmod_base_path"
 	
 	if [ ! -L "$smod_path" ] ; then
-		#echo "$distribution $cldr_version $locale_smod/$category"
-		ln -s "../bare/$locale" "$smod_path"
+		ln -w -s "../bare/$locale" "$smod_path"
 	fi
 
-	# XXX Is it odd to refer to categories other than LC_COLLATE by CLDR
-	# version?
-	if [ ! -L "$vmod_path" ] ; then
-		#echo "$distribution $cldr_version $locale_vmod/$category"
-		ln -s "../bare/$locale" "$vmod_path"
+	# only the LC_COLLATE category is available with a CLDR modifier
+	# (perhaps all categories should be?)
+	if [ -e "$output/$distribution/bare/$locale/LC_COLLATE" ] ; then
+	       if [ ! -L "$vmod_path/LC_COLLATE" ] ; then
+			mkdir -p "$vmod_path"
+			ln -w -s "../../bare/$locale/LC_COLLATE" "$vmod_path/LC_COLLATE"
+		fi
 	fi
-}
-
-build_lc_collate()
-{
-	distribution="$1"
-	colldef="$2"
-
-	os_version="$(echo "$distribution" | sed 's/^freebsd//')"
-	work_path="$work/$distribution"
-	makefile="$colldef/Makefile"
-
-	mkdir -p "$output/$distribution/bare"
-
-	fetch_src $os_version "$makefile"
-	cldr_version="$(grep 'CLDR_VERSION=' "$work_path/$makefile" | head -1 | sed 's/[^"]*"//;s/"$//')"
-	for locale in $(grep 'LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
-		build_locale_category \
-			"$distribution" \
-			"$locale" \
-			"LC_COLLATE" \
-			"$cldr_version" \
-			"$colldef/$locale.src"
-	done
-	(grep 'LOCALES_MAPPED+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from locale ; do
-		build_locale_category \
-			"$distribution" \
-			"$locale" \
-			"LC_COLLATE" \
-			"$cldr_version" \
-			"$colldef/$map_from.src"
-	done
-	(grep 'SAME+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from locale ; do
-		symlink_locale_category \
-			"$distribution" \
-			"$locale" \
-			"LC_COLLATE" \
-			"$cldr_version" \
-			"$symlink_from"
-	done
 }
 
 symlink_locale_category()
@@ -103,18 +66,13 @@ symlink_locale_category()
 	cldr_version="$4"
 	from="$5"
 
-	locale_dir="$work_dir/bare/$locale"
+	locale_dir="$output/$distribution/bare/$locale"
 
 	if [ ! -e "$locale_dir/$category" ] ; then
-		echo "$distribution $cldr_version $locale/$category = $from"
+		echo "$distribution: $locale/$category -> $from/$category"
 		mkdir -p "$locale_dir"
-		if [ "$category" = "LC_COLLATE" ] ; then
-			echo "$cldr_version" > "$work_dir/$locale.cldr_version"
-		else
-			read -r cldr_version < "$work_dir/$locale.cldr_version"
-		fi
 		symlink_modifiers $distribution $cldr_version $locale
-		ln -s "../$from/$category" "$locale_dir/$category"
+		ln -w -s "../$from/$category" "$locale_dir/$category"
 	fi
 }
 
@@ -127,16 +85,11 @@ build_locale_category()
 	source="$5"
 	
 	work_dir="$work/$distribution"
-	locale_dir="$work_dir/bare/$locale"
+	locale_dir="$output/$distribution/bare/$locale"
 
 	if [ ! -e "$locale_dir/$category" ] ; then
-		echo "$distribution $cldr_version $locale/$category"
+		echo "$distribution: $locale/$category $cldr_version"
 		mkdir -p "$locale_dir"
-		if [ "$category" = "LC_COLLATE" ] ; then
-			echo "$cldr_version" > "$work_dir/$locale.cldr_version"
-		else
-			read -r cldr_version < "$work_dir/$locale.cldr_version"
-		fi
 		symlink_modifiers "$distribution" "$cldr_version" "$locale"
 		os_version="$(echo "$distribution" | sed 's/^freebsd//')"
 		codeset="$(echo "$locale" | sed 's/.*\.//;s/@.*//')"
@@ -148,7 +101,9 @@ build_locale_category()
 					-i "$work_dir/$source" \
 					-V "$cldr_version" \
 					-f "$work_dir/$maps/map.$codeset" \
-					"$locale_dir" ;;
+					"$locale_dir"
+				symlink_modifiers "$distribution" "$cldr_version" "$locale"
+				;;
 			LC_CTYPE)
 				fetch_src $os_version "$maps/map.$codeset"
 				fetch_src $os_version "$maps/widths.txt"
@@ -156,11 +111,13 @@ build_locale_category()
 					-w "$work_dir/$maps/widths.txt" \
 					-i "$work_dir/$source" \
 					-f "$work_dir/$maps/map.$codeset" \
-					"$locale_dir" ;;
+					"$locale_dir"
+			       ;;
 			*) 
 				grep -v -E '^(#$$|#[ ])' \
-					< "$work_dir/$categorydef/$locale.src" \
-					> "$locale_dir/$category" ;;
+					< "$work_dir/$source" \
+					> "$locale_dir/$category"
+				;;
 		esac
 	fi
 }
@@ -175,30 +132,22 @@ build_locales_category()
 	work_path="$work/$distribution"
 	makefile="$categorydir/Makefile"
 
+	fetch_src $os_version "$makefile"
 	if [ "$category" = "LC_COLLATE" ] ; then
-		cldr_version="$(grep 'CLDR_VERSION=' "$work_path/$makefile" | head -1 | sed 's/[^"]*"//;s/"$//')"
+		cldr_version="$(grep '^CLDR_VERSION=' "$work_path/$makefile" | head -1 | sed 's/[^"]*"//;s/"$//')"
 	else
 		cldr_version=""
 	fi
 
 	mkdir -p "$output/$distribution/bare"
 
-	fetch_src $os_version "$makefile"
-	(grep -E '(SYMPAIRS)\+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
+	(grep '^SYMPAIRS+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
 		if [ ! -L "$work_path/$categorydir/$symlink_to" ] ; then
 			fetch_src $os_version "$categorydir/$symlink_from"
-			ln -s "$symlink_from" "$work_path/$categorydir/$symlink_to"
+			ln -w -s "$symlink_from" "$work_path/$categorydir/$symlink_to"
 		fi
 	done
-	for locale in $(grep 'LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
-		build_locale_category \
-			"$distribution" \
-			"$locale" \
-			"$category" \
-			"$cldr_version" \
-			"$categorydir/$locale.src"
-	done
-	(grep 'LOCALES_MAPPED+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from locale ; do
+	(grep '^LOCALES_MAPPED+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from locale ; do
 		build_locale_category \
 			"$distribution" \
 			"$locale" \
@@ -206,81 +155,27 @@ build_locales_category()
 			"$cldr_version" \
 			"$categorydir/$map_from.src"
 	done
-	(grep 'SAME+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from locale ; do
+	(grep '^SAME+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
+		build_locale_category \
+			"$distribution" \
+			"$symlink_from" \
+			"$category" \
+			"$cldr_version" \
+			"$categorydir/$symlink_from.src"
 		symlink_locale_category \
 			"$distribution" \
-			"$locale" \
+			"$symlink_to" \
 			"$category" \
 			"$cldr_version" \
 			"$symlink_from"
 	done
-}
-
-
-build_lc_ctype()
-{
-	distribution="$1"
-	ctypedef="$2"
-
-	os_version="$(echo "$distribution" | sed 's/^freebsd//')"
-	work_path="$work/$distribution"
-	makefile="$ctypedef/Makefile"
-
-	mkdir -p "$output/$distribution/bare"
-
-	fetch_src $os_version "$makefile"
-	(grep -E '(SYMPAIRS)\+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
-		if [ ! -L "$work_path/$ctypedef/$symlink_to" ] ; then
-			fetch_src $os_version "$ctypedef/$symlink_from"
-			ln -s "$symlink_from" "$work_path/$ctypedef/$symlink_to"
-		fi
-	done
-	for locale in $(grep 'LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
+	for locale in $(grep '^LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
 		build_locale_category \
 			"$distribution" \
 			"$locale" \
-			"LC_CTYPE" \
-			"CLDR" \
-			"$ctypedef/$locale.src"
-	done
-	(grep 'SAME+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from locale ; do
-		symlink_locale_category \
-			"$distribution" \
-			"$locale" \
-			"LC_CTYPE" \
+			"$category" \
 			"$cldr_version" \
-			"$symlink_from"
-	done
-}
-
-build_lc_common()
-{
-	distribution="$1"
-	categorydef="$2"
-	category="$3"
-
-	os_version="$(echo "$distribution" | sed 's/^freebsd//')"
-	makefile="$categorydef/Makefile"
-	work_path="$work/$distribution"
-
-	mkdir -p "$output/$distribution/bare"
-
-	fetch_src $os_version "$makefile"
-	for locale in $(grep 'LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
-		build_locale_category \
-			"$distribution" \
-			"$locale" \
-			"$category" \
-			"CLDR" \
-			"$categorydef/$locale.src"
-	done
-	(grep -E '(SAME)\+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from map_to ; do
-		symlink_locale_category \
-			"$distribution" \
-			"$map_to" \
-			"$category" \
-			"CLDR" \
-			"$map_from"
+			"$categorydir/$locale.src"
 	done
 }
 
@@ -298,37 +193,16 @@ build_locales()
 	build_locales_category $1 "share/timedef" "LC_TIME"
 
 	if [ "$os_version" -ge "14" ] ; then
+		build_locales_category $1 "share/colldef_unicode" "LC_COLLATE"
 		build_locales_category $1 "share/monetdef_unicode" "LC_MONETARY"
 		build_locales_category $1 "share/msgdef_unicode" "LC_MESSAGE"
 		build_locales_category $1 "share/numericdef_unicode" "LC_NUMERIC"
-	fi
-	if [ "$os_version" -ge "15" ] ; then
-		build_locales_category $1 "share/ctypedef_unicode" "LC_CTYPE"
 	fi
 }
 
 case $1 in
 	freebsd*)
 		build_locales "$1"
-		;;
-	xfreebsd13)
-		build_lc_collate $1 "share/colldef"
-		build_lc_ctype $1 "share/ctypedef"
-		build_lc_common $1 "share/monetdef" "LC_MONETARY"
-		build_lc_common $1 "share/msgdef" "LC_MESSAGE"
-		build_lc_common $1 "share/numericdef" "LC_NUMERIC"
-		;;
-	xfreebsd*)
-		build_lc_collate $1 "share/colldef"
-		build_lc_collate $1 "share/colldef_unicode"
-		build_lc_ctype $1 "share/ctypedef"
-		build_lc_ctype $1 "share/ctypedef_unicode"
-		build_lc_common $1 "share/monetdef" "LC_MONETARY"
-		build_lc_common $1 "share/monetdef_unicode" "LC_MONETARY"
-		build_lc_common $1 "share/msgdef" "LC_MESSAGE"
-		build_lc_common $1 "share/msgdef_unicode" "LC_MESSAGE"
-		build_lc_common $1 "share/numericdef" "LC_NUMERIC"
-		build_lc_common $1 "share/numericdef_unicode" "LC_NUMERIC"
 		;;
 	*)
 		echo "Usage: $0 freebsd13 (or higher...)"
