@@ -67,7 +67,7 @@ symlink_modifiers()
         if [ ! -L "$locale_origin_symlink" ] ; then
             mkdir -p "$(dirname "$locale_origin_symlink")"
             ln -w -s "../plain/$locale" "$locale_origin_symlink"
-	fi
+    fi
     fi
 
     if [ "$create_version_modifier" = "1" -a -n "$cldr_version" ] ; then 
@@ -76,7 +76,7 @@ symlink_modifiers()
         if [ ! -L "$locale_version_symlink" ] ; then
             mkdir -p "$(dirname "$locale_version_symlink")"
             ln -w -s "../plain/$locale" "$locale_version_symlink"
-	fi
+    fi
     fi
 }
 
@@ -243,21 +243,21 @@ build_locales()
 fetch_release_tags()
 {
     if [ -n "$git_local_path" ] ; then
-	git_command="git -C $git_local_path tag"
+    git_command="git -C $git_local_path tag"
     else
         github_url="https://github.com/$github_user/$github_repo"
-	git_command="git ls-remote --tags $github_url | \
-		cut -f2 | \
-		sed 's|refs/tags/||' | \
-		grep -v '\^{}' | \
-		grep -v '_cvs'"
+    git_command="git ls-remote --tags $github_url | \
+        cut -f2 | \
+        sed 's|refs/tags/||' | \
+        grep -v '\^{}' | \
+        grep -v '_cvs'"
     fi
 
     sh -c "$git_command" | \
-	    grep -v '_cvs$' | \
-	    grep '^release/[0-9][0-9]*\.[0-9][0-9]*\.' | \
-	    sort -Vr \
-	    > "$srcdir/release_tags"
+        grep -v '_cvs$' | \
+        grep '^release/[0-9][0-9]*\.[0-9][0-9]*\.' | \
+        sort -Vr \
+        > "$srcdir/release_tags"
 }
 
 scan_release_tags()
@@ -283,7 +283,7 @@ scan_release_tags()
             origin="$origin_prefix$rel"
         fi
 
-	# skip if non-match
+    # skip if non-match
         case "$origin" in
             $origin_pattern) ;; # globbing comparison
             *) continue;;
@@ -291,28 +291,28 @@ scan_release_tags()
 
         if [ "$outdated" = "1" ] ; then
             # FreeBSD 11.0 is when the modern localedef toolchain replaced
-	    # ancient pre-Unicode locale system.
+        # ancient pre-Unicode locale system.
             if [ "$rel_major" -lt 11 ] ; then continue ; fi
-	else
-	    # FreeBSD 13.0 is where CLDR version stamps that PostgreSQL cares
-	    # about began so it's a good place to start by default.
-	    if [ "$rel_major" -lt 13 ] ; then continue ; fi
-	fi
+    else
+        # FreeBSD 13.0 is where CLDR version stamps that PostgreSQL cares
+        # about began so it's a good place to start by default.
+        if [ "$rel_major" -lt 13 ] ; then continue ; fi
+    fi
 
-	# Skip newer than the host's localedef, unless --newer-than-host
-	# specified, since that seems like it might lead to problems.
-	if [ "$newer_than_host" = "0" ] ; then
+    # Skip newer than the host's localedef, unless --newer-than-host
+    # specified, since that seems like it might lead to problems.
+    if [ "$newer_than_host" = "0" ] ; then
             if [ "$rel_major" -gt "$my_rel_major" ] ; then
                 continue
             elif [ "$rel_major" -eq "$my_rel_major" -a \
                 "$rel_minor" -gt "$my_rel_minor" ] ; then
                 continue
-	    fi
+        fi
         fi
 
-	found="1"
-	case $action in
-	    SHOW) printf "%-12s %s\n" "$origin" "$tag";;
+    found="1"
+    case $action in
+        SHOW) printf "%-12s %s\n" "$origin" "$tag";;
             BUILD) echo build_locales "$origin" "$tag";;
             VALIDATE) ;;
         esac
@@ -321,10 +321,10 @@ scan_release_tags()
     if [ "$found" = "0" ] ; then
         if [ "$origin_filter" = "" ] ; then
             echo "No releases found"
-	else
+    else
             echo "No releases found that match '$origin_filter'"
-	fi
-	exit 1
+    fi
+    exit 1
     fi
 }
 
@@ -397,24 +397,24 @@ while : ; do
                                else
                                    for origin_pattern in $@ ; do
                                        scan_release_tags "SHOW" "$origin_pattern"
-				   done
+                   done
                                fi
-			       break
-			       ;;
+                   break
+                   ;;
         build)                 shift
                                case $1 in
                                    -t|--tag)
                                        shift
-				       if [ -a $# -ne 2 ] ; then
+                       if [ -a $# -ne 2 ] ; then
                                            echo "expected: build --tag <tag> <origin>'"
                                            exit 1
                                        fi
-				       build_locales "$2" "$1"
-				       ;;
+                       build_locales "$2" "$1"
+                       ;;
                                    "")
                                        fetch_release_tags
                                        scan_release_tags "BUILD" "*"
-				       ;;
+                       ;;
                                    *)
                                        fetch_release_tags
                                        for origin_pattern in $@ ; do
@@ -423,10 +423,10 @@ while : ; do
                                        for origin_pattern in $@ ; do
                                            scan_release_tags "BUILD" "$origin_pattern"
                                        done
-				       ;;
+                       ;;
                                esac
-			       break
-			       ;;
+                   break
+                   ;;
         install)               do_install; break;;
         package)               do_package; break;;
 
