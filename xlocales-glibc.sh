@@ -1,19 +1,19 @@
 #!/usr/bin/sh
 #
-# Fetch and compile locale definitions from various GNU/Linux distributions and
-# compile them on the present system, which should be a later glibc system.
-#
-# Currently supports only a few common glibc-based systems as source, and any
-# glibc-based system as local system.
-#
-# XXX Could be extended easily to FreeBSD.  For other operating systems, we
-# might need to invent a way to "hide" a cross-check version string somewhere
-# (LC_TIME ERA?)
+# Compile historical glibc locale data, with any patches that distributions
+# might have applied.
 
 set -e
 
-work="work"
-output="xlocales"
+verbose="0"
+newer_than_host="0"
+builddir="build"
+srcdir="srcdir"
+prefixdir="/usr/locale"
+create_origin_modifier="1"
+create_version_modifier="1"
+version_prefix="glibc"
+
 localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
 fetch_locales_deb()
@@ -22,10 +22,10 @@ fetch_locales_deb()
     url="$2"
     package="$(basename $url)"
 
-    mkdir -p "$work/$distribution/charmaps"
+    mkdir -p "$srcdir/$distribution/charmaps"
 
     # pull down the package if we haven't already
-    package_path="$work/$distribution/$package"
+    package_path="$srcdir/$distribution/$package"
     if [ ! -f "$package_path" ] ; then
         echo "Fetching $distribution package $package from $url"
         curl -f -s -S "$url" > "$package_path.tmp"
@@ -33,7 +33,7 @@ fetch_locales_deb()
     fi
 
     # unpack the interesting contents into fakeroot if we haven't already
-    fakeroot_path="$work/$distribution/fakeroot"
+    fakeroot_path="$srcdir/$distribution/fakeroot"
     if [ ! -e "$fakeroot_path" ] ; then
         rm -fr "$fakeroot_path.tmp"
         mkdir -p "$fakeroot_path.tmp"
@@ -48,7 +48,7 @@ fetch_locales_deb()
     fi
 
     # unpack the charsets if we haven't already
-    charmaps_path="$work/$distribution/charmaps"
+    charmaps_path="$srcdir/$distribution/charmaps"
     for charmap_gz in $(ls "$fakeroot_path/usr/share/i18n/charmaps") ; do
         charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
         charmap="$(basename "$charmap_gz" .gz)"
@@ -66,8 +66,8 @@ compile_locales()
     distribution="$1"
     version="$2"
 
-    fakeroot_path="$work/$distribution/fakeroot"
-    supported_path="$work/$distribution/SUPPORTED"
+    fakeroot_path="$srcdir/$distribution/fakeroot"
+    supported_path="$srcdir/$distribution/SUPPORTED"
 
     if [ -e "$fakeroot_path/usr/share/i18n/SUPPORTED" ] ; then
         # debian includes a SUPPORTED file in a convenient format
@@ -76,18 +76,18 @@ compile_locales()
         # otherwise we have to fish it out of glibc sources, which
         # we download and unpack if we haven't already (we don't use
         # localedata from there though, as distros might have patched it)
-        glibc_path="$work/glibc-$version"
+        glibc_path="$srcdir/glibc-$version"
         if [ ! -e "$glibc_path" ] ; then
-            rm -fr "$work/glibc.tmp"
-            mkdir -p "$work/glibc.tmp"
+            rm -fr "$srcdir/glibc.tmp"
+            mkdir -p "$srcdir/glibc.tmp"
             (
-                cd "$work/glibc.tmp"
+                cd "$srcdir/glibc.tmp"
                 gnu_glibc_url="https://ftp.gnu.org/gnu/glibc/glibc-$version.tar.xz"
                 echo "Fetching $gnu_glibc_url..."
                 curl -f -s -S "$gnu_glibc_url" | tar xvJ
             )
-            mv "$work/glibc.tmp/glibc-$version" "$glibc_path"
-            rm -fr "$work/glibc.tmp"
+            mv "$srcdir/glibc.tmp/glibc-$version" "$glibc_path"
+            rm -fr "$srcdir/glibc.tmp"
         fi
         if [ ! -e "$glibc_path" ] ; then
             echo "need $glibc_path"
@@ -98,9 +98,9 @@ compile_locales()
         mv "$supported_path.tmp" "$supported_path"
     fi
 
-    mkdir -p "$output/$distribution/by-name"
-    mkdir -p "$output/$distribution/with-version-mod"
-    mkdir -p "$output/$distribution/with-distro-mod"
+    mkdir -p "$builddir/$distribution/plain"
+    mkdir -p "$builddir/$distribution/veresion-mod"
+    mkdir -p "$builddir/$distribution/origin-mod"
 
     # compile all locales if we haven't already
     while read -r name charmap ; do
@@ -108,12 +108,12 @@ compile_locales()
       name_charmap="$(echo "$name" | sed 's/^[^.]*//')"
       name_charmap_munged="$(echo "$name_charmap" | sed 's/[^.a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')"
 
-      locale_path="$output/$distribution/by-name/$name_base$name_charmap_munged"
-      version_mod_path="$output/$distribution/with-version-mod/$name_base$name_charmap_munged@$version"
-      distro_mod_path="$output/$distribution/with-distro-mod/$name_base$name_charmap_munged@$distribution"
+      locale_path="$builddir/$distribution/plain/$name_base$name_charmap_munged"
+      version_mod_path="$builddir/$distribution/veresion-mod/$name_base$name_charmap_munged@$version"
+      system_mod_path="$builddir/$distribution/origin-mod/$name_base$name_charmap_munged@$distribution"
 
-      locale_input="$work/$distribution/fakeroot/usr/share/i18n/locales/$name_base"
-      charmap_input="$work/$distribution/charmaps/$charmap"
+      locale_input="$srcdir/$distribution/fakeroot/usr/share/i18n/locales/$name_base"
+      charmap_input="$srcdir/$distribution/charmaps/$charmap"
 
       if [ ! -e "$locale_path" ] ; then
          echo "Compiling $locale_path..."
@@ -126,11 +126,11 @@ compile_locales()
          locale_input_rev="$locale_input.rev"
          sed "s/^\(revision *\".*\)\"$/\1; distribution=$distribution; localedef=$localedef_version; localedata=$version\"/" < $locale_input > $locale_input_rev
 
-         I18NPATH="$work/$distribution/fakeroot/usr/share/i18n" localedef -f "$charmap_input" -i "$locale_input_rev" "$locale_path.tmp"
+         I18NPATH="$srcdir/$distribution/fakeroot/usr/share/i18n" localedef -f "$charmap_input" -i "$locale_input_rev" "$locale_path.tmp"
          mv "$locale_path.tmp" "$locale_path"
-         rm -fr "$version_mod_path" "$distro_mod_path"
-         ln -s "../by-name/$name_base$name_charmap_munged" "$version_mod_path"
-         ln -s "../by-name/$name_base$name_charmap_munged" "$distro_mod_path"
+         rm -fr "$version_mod_path" "$system_mod_path"
+         ln -s "../plain/$name_base$name_charmap_munged" "$version_mod_path"
+         ln -s "../plain/$name_base$name_charmap_munged" "$system_mod_path"
       fi
     done < "$supported_path"
 }
@@ -154,7 +154,7 @@ import_locales_debianlike_latest()
     codename="$2"
     repo_base_url="$3"
 
-    package_list="$work/$distribution/Packages"
+    package_list="$srcdir/$distribution/Packages"
 
     # In older Debian and all Ubuntu there is no "binary-all" so we have to
     # look in "binary-amd64"
@@ -172,7 +172,7 @@ import_locales_debianlike_latest()
         mv "$package_list.tmp" "$package_list"
     fi
 
-    package_info="$work/$distribution/locales.package"
+    package_info="$srcdir/$distribution/locales.package"
     if [ ! -e "$package_info" ] ; then
         awk 'BEGIN { in_zone = 0; } /^Package: locales$/ { in_zone = 1; print; } /^ *$/ { in_zone = 0; } in_zone { print; }' "$package_list" > "$package_info.tmp"
         mv "$package_info.tmp" "$package_info"
@@ -224,16 +224,16 @@ fetch_locales_rpm()
     locale_package="$(basename $locale_url)"
     version="$4"
 
-    mkdir -p "$work/$distribution/charmaps"
+    mkdir -p "$srcdir/$distribution/charmaps"
 
     # pull down the packages if we haven't already
-    glibc_package_path="$work/$distribution/$glibc_package"
+    glibc_package_path="$srcdir/$distribution/$glibc_package"
     if [ ! -f "$glibc_package_path" ] ; then
         echo "Fetching $distribution package $glibc_package from $glibc_url"
         curl -f -s -S "$glibc_url" > "$glibc_package_path.tmp"
         mv "$glibc_package_path.tmp" "$glibc_package_path"
     fi
-    locale_package_path="$work/$distribution/$locale_package"
+    locale_package_path="$srcdir/$distribution/$locale_package"
     if [ ! -f "$locale_package_path" ] ; then
         echo "Fetching $distribution package $locale_package from $locale_url"
         curl -f -s -S "$locale_url" > "$locale_package_path.tmp"
@@ -241,7 +241,7 @@ fetch_locales_rpm()
     fi
 
     # unpack the interesting contents into fakeroot if we haven't already
-    fakeroot_path="$work/$distribution/fakeroot"
+    fakeroot_path="$srcdir/$distribution/fakeroot"
     if [ ! -e "$fakeroot_path" ] ; then
         rm -fr "$fakeroot_path.tmp"
         mkdir -p "$fakeroot_path.tmp"
@@ -262,7 +262,7 @@ fetch_locales_rpm()
     fi
 
     # unpack the charsets if we haven't already
-    charmaps_path="$work/$distribution/charmaps"
+    charmaps_path="$srcdir/$distribution/charmaps"
     for charmap_gz in $(ls "$fakeroot_path/usr/share/i18n/charmaps") ; do
         charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
         charmap="$(basename "$charmap_gz" .gz)"
