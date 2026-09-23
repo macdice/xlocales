@@ -4,22 +4,30 @@
 
 set -e
 
-verbose=0
-outdated=0
-newer_than_host=0
+verbose="0"
+outdated="0"
+newer_than_host="0"
 builddir="build"
 srcdir="src"
-prefixdir="/usr/local"
-create_version_modifier="1"
+prefixdir="/usr/locale"
 create_origin_modifier="1"
-origin_prefix="fbsd"
+create_version_modifier="1"
+origin_prefix="freebsd"
 version_prefix="cldr"
-custom_tag=""
 github_user="freebsd"
 github_repo="freebsd-src"
 git_local_path=""
 
+my_rel="$(uname -v | sed 's|^[^0-9]*||;s|-.*$||')"
+my_rel_major="$(echo $my_rel | sed 's|\..*||')"
+my_rel_minor="$(echo $my_rel | sed 's|^[^.]*\.||')"
+
 maps="tools/tools/locale/etc/final-maps"
+
+reset_line()
+{
+    printf '\r\033[K'
+}
 
 fetch_src()
 {
@@ -43,7 +51,7 @@ fetch_src()
         fi
         curl -f -s -S "$src_url" > "$dst_path.tmp"
         mv "$dst_path.tmp" "$dst_path"
-        if [ "$verbose" != "1" ] ; then printf '\r\033[K' ; fi
+        if [ "$verbose" != "1" ] ; then reset_line ; fi
     fi
 }
 
@@ -145,7 +153,7 @@ build_locale_category()
                     > "$locale_dir/$category"
                 ;;
         esac
-        if [ "$verbose" != "1" ] ; then printf '\r\033[K' ; fi
+        if [ "$verbose" != "1" ] ; then reset_line ; fi
     fi
 }
 
@@ -161,25 +169,9 @@ build_locales_category()
 
     fetch_src "$origin" "$tag" "$makefile"
     if [ "$category" = "LC_COLLATE" ] ; then
-        # FreeBSD 13+ stamps CLDR_VERSION here, and injects it into the
-        # locales that ship in the base system for retrieval with
-        # querylocale(), where PostgreSQL looks.  We will do exactly
-        # the same here to make PostgreSQL happy.
-        #
-        # If you explicitly ask for 11 or 12, you'll get an empty
-        # string here, and no "version-mod" directory.  Before that,
-        # the ancient locale code was used and none of this is likely
-        # to srcdir...
         cldr_version="$(grep '^CLDR_VERSION=' "$srcdir_path/$makefile" |
             head -1 | sed 's/[^"]*"//;s/"$//')"
     else
-        # For other categories you just get "plain" and "origin-mod",
-        # no "version-mod".
-        #
-        # (Would it even make sense to use CLDR versions to locate
-        # other categories?  LC_CTYPE, maybe, but I guess it really
-        # wants a Unicode version... that's surely implied by CLDR
-        # though...)
         cldr_version=""
     fi
 
@@ -248,24 +240,35 @@ build_locales()
     echo "$builddir/$origin"
 }
 
-scan_tags()
+fetch_release_tags()
 {
-    list_only="$1"
-    origin_filter="$2"
-
-    my_rel="$(uname -v | sed 's|^[^0-9]*||;s|-.*$||')"
-    my_rel_major="$(echo $my_rel | sed 's|\..*||')"
-    my_rel_minor="$(echo $my_rel | sed 's|^[^.]*\.||')"
-    last_rel=""
-
     if [ -n "$git_local_path" ] ; then
-	git_command="-C $git_local_path tag"
+	git_command="git -C $git_local_path tag"
     else
         github_url="https://github.com/$github_user/$github_repo"
-	git_command="git ls-remote --tags $github_url | cut -f2 | sed 's|refs/tags/||' | grep -v '\^{}' | grep -v '_cvs'"
+	git_command="git ls-remote --tags $github_url | \
+		cut -f2 | \
+		sed 's|refs/tags/||' | \
+		grep -v '\^{}' | \
+		grep -v '_cvs'"
     fi
 
-    for tag in $(sh -c "$git_command" | grep -v '_cvs$' | grep '^release/[0-9][0-9]*\.[0-9][0-9]*\.' | sort -Vr) ; do
+    sh -c "$git_command" | \
+	    grep -v '_cvs$' | \
+	    grep '^release/[0-9][0-9]*\.[0-9][0-9]*\.' | \
+	    sort -Vr \
+	    > "$srcdir/release_tags"
+}
+
+scan_release_tags()
+{
+    action="$1"
+    origin_pattern="$2"
+
+    found="0"
+    last_rel=""
+
+    for tag in $(cat "$srcdir/release_tags") ; do
         rel="$(echo $tag | sed 's|^release/\([0-9]*\)\.\([0-9]*\)\..*$|\1.\2|')"
         rel_major="$(echo $rel | sed 's|\..*||')"
         rel_minor="$(echo $rel | sed 's|^[^.]*\.||')"
@@ -280,18 +283,19 @@ scan_tags()
             origin="$origin_prefix$rel"
         fi
 
-        # "build <origin>" non-match?
-        if [ -n "$origin_filter" -a "$origin_filter" != "$origin" ] ; then
-            continue
-	fi
+	# skip if non-match
+        case "$origin" in
+            $origin_pattern) ;; # globbing comparison
+            *) continue;;
+        esac
 
         if [ "$outdated" = "1" ] ; then
             # FreeBSD 11.0 is when the modern localedef toolchain replaced
-	    # ancient pre-Unicode locales.
+	    # ancient pre-Unicode locale system.
             if [ "$rel_major" -lt 11 ] ; then continue ; fi
 	else
 	    # FreeBSD 13.0 is where CLDR version stamps that PostgreSQL cares
-	    # about began.
+	    # about began so it's a good place to start by default.
 	    if [ "$rel_major" -lt 13 ] ; then continue ; fi
 	fi
 
@@ -306,33 +310,21 @@ scan_tags()
 	    fi
         fi
 
-        if [ "$list_only" != "0" ] ; then
-            printf "%-12s %s\n" "$origin" "$tag"
-        else
-            build_locales "$origin" "$tag"
-        fi
+	found="1"
+	case $action in
+	    SHOW) printf "%-12s %s\n" "$origin" "$tag";;
+            BUILD) echo build_locales "$origin" "$tag";;
+            VALIDATE) ;;
+        esac
     done
-}
 
-do_list()
-{
-    printf "%-12s %s\n" "ORIGIN" "TAG"
-    scan_tags 1
-}
-
-do_build()
-{
-    origin="$1"
-
-    if [ -n "$custom_tag" ] ; then
-        if [ -z "$origin" -a "$create_origin_modifier" = "1" ] ; then
-            echo "An origin must be provided when using explicit --tag,"
-            echo "unless --no-origin-modifier is specified."
-            exit 1
+    if [ "$found" = "0" ] ; then
+        if [ "$origin_filter" = "" ] ; then
+            echo "No releases found"
+	else
+            echo "No releases found that match '$origin_filter'"
 	fi
-        build_locales "$origin" "$custom_tag"
-    else
-        scan_tags 0 "$origin"
+	exit 1
     fi
 }
 
@@ -340,60 +332,101 @@ show_help()
 {
     cat >&2 <<EOF
 
+A script to compile locale definitions from older FreeBSD releases.
+
 Usage: $0 [options...] command
 
  Options:
 
-  -V|--verbose                 log activity
+  -v|--verbose                 log activity
 
-  -O|--outdated                list non-latest-patch releases and < 13.0
-  -N|--newer                   list releases newer than host localedef (!)
+  -o|--outdated                list non-latest-patch releases and < 13.0
+  -n|--newer                   list releases newer than host localedef (!)
 
-  -B|--builddir                where to compile locales (default: build)
-  -S|--srcdir                  where to download/cache data (default: src)
-  -P|--prefix                  package install prefix (default: /usr/local)
+  -b|--builddir                where to compile locales (default: build)
+  -s|--srcdir                  where to download/cache data (default: src)
+  -p|--prefix                  install/package prefix (default: /usr/local)
 
-  -T|--tag                     specify a freeform Git tag to build
-  -U|--github-user user        Github user (default: freebsd)
-  -R|--github-repo repo        Github repo (default: freebsd-src)
-  -G|--git-local-path path     query local repo instead of Github
+  -u|--github-user user        Github user (default: freebsd)
+  -r|--github-repo repo        Github repo (default: freebsd-src)
+  -g|--git-local-path path     query local repo instead of Github
 
-     --origin-prefix           prefix for origin name (default: fbsd)
-     --version-prefix          prefix for version modifiers (default: cldr)
+     --origin-prefix           how to make origin names (default: freebsd)
+     --version-prefix          how to make version modifiers (default: cldr)
      --no-version-modifier     don't create locale@version symlink tree
      --no-origin-modifier      don't create locale@origin symlink tree
 
  Commands:
 
-  list                         list available origins (FreeBSD releases)
-  build [origin]               cross-compile locales from one or all origins
-  install                      install cross-compiled locales
-  package                      package cross-compiled locales
+  list                         list all available origins (= FreeBSD releases)
+  list <origin> ...            list matching origins
+
+  build                        fetch and compile all available origins
+  build <origin> ...           fetch and compile matching origins
+  build -t <tag> <origin>      compile from <tag> and name result <origin>
+
+  install                      install compiled locales
+  package                      package compiled locales
 
 EOF
 }
  
 while : ; do
     case "$1" in
-        -V|--verbose)          verbose=1; shift;;
-        -O|--outdated)         outdated=1; shift;;
-        -N|--newer-than-host)  newer_than_host=1; shift;;
-        -B|--builddir)         builddir="$2"; shift; shift;;
-        -S|--srcdir)           srcdir="$2"; shift; shift;;
-        -P|--prefix)           prefix="$2"; shift; shift;;
+        -v|--verbose)          verbose=1; shift;;
+        -o|--outdated)         outdated=1; shift;;
+        -n|--newer-than-host)  newer_than_host=1; shift;;
+        -b|--builddir)         builddir="$2"; shift; shift;;
+        -s|--srcdir)           srcdir="$2"; shift; shift;;
+        -p|--prefix)           prefix="$2"; shift; shift;;
 
-        -T|--tag)              custom_tag="$2"; shift; shift;;
-        -U|--github-user)      github_user="$2"; shift; shift;;
-        -R|--github-repo)      github_repo="$2"; shift; shift;;
-        -G|--git-local-path)   git_local_path="$2"; shift; shift;;
+        -u|--github-user)      github_user="$2"; shift; shift;;
+        -r|--github-repo)      github_repo="$2"; shift; shift;;
+        -g|--git-local-path)   git_local_path="$2"; shift; shift;;
 
         --origin-prefix)       origin_prefix="$2"; shift; shift;;
         --version-prefix)      version_prefix="$2"; shift; shift;;
         --no-origin-modifier)  create_origin_modifer=0; shift;;
         --no-version-modifier) create_version_modifer=0; shift;;
 
-        list)                  do_list; break;;
-        build)                 do_build "$2"; break;;
+        list)                  shift
+                               fetch_release_tags
+                               printf "%-12s %s\n" "ORIGIN" "TAG"
+                               if [ $# -eq 0 ] ; then
+                                   scan_release_tags "SHOW" "*"
+                               else
+                                   for origin_pattern in $@ ; do
+                                       scan_release_tags "SHOW" "$origin_pattern"
+				   done
+                               fi
+			       break
+			       ;;
+        build)                 shift
+                               case $1 in
+                                   -t|--tag)
+                                       shift
+				       if [ -a $# -ne 2 ] ; then
+                                           echo "expected: build --tag <tag> <origin>'"
+                                           exit 1
+                                       fi
+				       build_locales "$2" "$1"
+				       ;;
+                                   "")
+                                       fetch_release_tags
+                                       scan_release_tags "BUILD" "*"
+				       ;;
+                                   *)
+                                       fetch_release_tags
+                                       for origin_pattern in $@ ; do
+                                           scan_release_tags "VALIDATE" "$origin_pattern"
+                                       done
+                                       for origin_pattern in $@ ; do
+                                           scan_release_tags "BUILD" "$origin_pattern"
+                                       done
+				       ;;
+                               esac
+			       break
+			       ;;
         install)               do_install; break;;
         package)               do_package; break;;
 
