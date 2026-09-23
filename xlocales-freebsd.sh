@@ -4,6 +4,19 @@
 
 set -e
 
+verbose=0
+outdated=0
+newer_than_host=0
+builddir="build"
+srcdir="src"
+prefixdir="/usr/local"
+create_version_modifier="1"
+create_origin_modifier="1"
+version_modifer_prefix="cldr"
+custom_tag=""
+github_user="freebsd"
+github_repo="freebsd-src"
+git_local_path=""
 
 maps="tools/tools/locale/etc/final-maps"
 
@@ -17,16 +30,16 @@ fetch_src()
     src_url="https://raw.githubusercontent.com/freebsd/freebsd-src/$tag/$src_path"
     src_dir="$(dirname "$src_path")"
 
-    work_path="$work/$origin"
-    dst_dir="$work/$origin/$src_dir"
-    dst_path="$work/$origin/$src_path"
+    srcdir_path="$srcdir/$origin"
+    dst_dir="$srcdir/$origin/$src_dir"
+    dst_path="$srcdir/$origin/$src_path"
 
     if [ ! -e "$dst_path" ] ; then
         mkdir -p "$dst_dir"
         if [ "$verbose" = "1" ] ; then
-            echo "$output/$origin: fetching $src_url..."
+            echo "$builddir/$origin: fetching $src_url..."
         else
-            printf "$output/$origin: fetching $src_path..."
+            printf "$builddir/$origin: fetching $src_path..."
         fi
         curl -f -s -S "$src_url" > "$dst_path.tmp"
         mv "$dst_path.tmp" "$dst_path"
@@ -40,23 +53,22 @@ symlink_modifiers()
     cldr_version="$2"
     locale="$3"
 
-    locale_origin="$locale@$origin"
-    locale_version="$locale@$cldr_version"
-    locale_origin_symlink="$output/$origin/origin-mod/$locale_origin"
-    locale_version_dir="$output/$origin/version-mod/$locale_version"
-
-    if [ ! -L "$locale_origin_symlink" ] ; then
-        mkdir -p "$(dirname "$locale_origin_symlink")"
-        ln -w -s "../plain/$locale" "$locale_origin_symlink"
+    if [ "$create_origin_modifier" = "1" ] ; then
+        locale_origin="$locale@$origin"
+        locale_origin_symlink="$builddir/$origin/origin-mod/$locale_origin"
+        if [ ! -L "$locale_origin_symlink" ] ; then
+            mkdir -p "$(dirname "$locale_origin_symlink")"
+            ln -w -s "../plain/$locale" "$locale_origin_symlink"
+	fi
     fi
 
-    if [ -n "$cldr_version" ] ; then 
-        if [ -e "$output/$origin/plain/$locale/LC_COLLATE" ] ; then
-               if [ ! -L "$locale_version_dir/LC_COLLATE" ] ; then
-                mkdir -p "$locale_version_dir"
-                ln -w -s "../../plain/$locale/LC_COLLATE" "$locale_version_dir/LC_COLLATE"
-            fi
-        fi
+    if [ "$create_version_modifier" = "1" -a -n "$cldr_version" ] ; then 
+        locale_version="$locale@$version_modifier_prefix$cldr_version"
+        locale_version_symlink="$builddir/$origin/version-mod/$locale_version"
+        if [ ! -L "$locale_version_symlink" ] ; then
+            mkdir -p "$(dirname "$locale_version_symlink")"
+            ln -w -s "../plain/$locale" "$locale_version_symlink"
+	fi
     fi
 }
 
@@ -68,7 +80,7 @@ symlink_locale_category()
     cldr_version="$4"
     from="$5"
 
-    locale_dir="$output/$origin/plain/$locale"
+    locale_dir="$builddir/$origin/plain/$locale"
 
     if [ ! -e "$locale_dir/$category" ] ; then
         #echo "$origin: $locale/$category -> $from/$category"
@@ -87,8 +99,8 @@ build_locale_category()
     cldr_version="$5"
     source="$6"
     
-    work_dir="$work/$origin"
-    locale_dir="$output/$origin/plain/$locale"
+    srcdir_dir="$srcdir/$origin"
+    locale_dir="$builddir/$origin/plain/$locale"
 
     if [ ! -e "$locale_dir/$category" ] ; then
         #echo "$origin: $locale/$category $cldr_version"
@@ -104,27 +116,27 @@ build_locale_category()
         else
             cldr_version_info=""
         fi
-        printf "$output/$origin: compiling $locale/$category$cldr_version_info..."
+        printf "$builddir/$origin: compiling $locale/$category$cldr_version_info..."
         if [ "$verbose" = "1" ] ; then echo ; fi
         case "$category" in
             LC_COLLATE) 
                 localedef -U \
-                    -i "$work_dir/$source" \
+                    -i "$srcdir_dir/$source" \
                     -V "$cldr_version" \
-                    -f "$work_dir/$maps/map.$codeset" \
+                    -f "$srcdir_dir/$maps/map.$codeset" \
                     "$locale_dir"
                 symlink_modifiers "$origin" "$cldr_version" "$locale"
                 ;;
             LC_CTYPE)
                 localedef -U -c \
-                    -w "$work_dir/$maps/widths.txt" \
-                    -i "$work_dir/$source" \
-                    -f "$work_dir/$maps/map.$codeset" \
+                    -w "$srcdir_dir/$maps/widths.txt" \
+                    -i "$srcdir_dir/$source" \
+                    -f "$srcdir_dir/$maps/map.$codeset" \
                     "$locale_dir"
                    ;;
             *) 
                 grep -v -E '^(#$$|#[ ])' \
-                    < "$work_dir/$source" \
+                    < "$srcdir_dir/$source" \
                     > "$locale_dir/$category"
                 ;;
         esac
@@ -140,7 +152,7 @@ build_locales_category()
     category="$4"
 
     rel="$(echo "$origin" | sed 's/^freebsd//')"
-    work_path="$work/$origin"
+    srcdir_path="$srcdir/$origin"
     makefile="$categorydir/Makefile"
 
     fetch_src $origin "$tag" "$makefile"
@@ -153,8 +165,8 @@ build_locales_category()
         # If you explicitly ask for 11 or 12, you'll get an empty
         # string here, and no "version-mod" directory.  Before that,
         # the ancient locale code was used and none of this is likely
-        # to work...
-        cldr_version="$(grep '^CLDR_VERSION=' "$work_path/$makefile" |
+        # to srcdir...
+        cldr_version="$(grep '^CLDR_VERSION=' "$srcdir_path/$makefile" |
             head -1 | sed 's/[^"]*"//;s/"$//')"
     else
         # For other categories you just get "plain" and "origin-mod",
@@ -166,15 +178,15 @@ build_locales_category()
         # though...)
     fi
 
-    mkdir -p "$output/$origin/plain"
+    mkdir -p "$builddir/$origin/plain"
 
-    (grep '^SYMPAIRS+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
-        if [ ! -L "$work_path/$categorydir/$symlink_to" ] ; then
+    (grep '^SYMPAIRS+=' "$srcdir_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
+        if [ ! -L "$srcdir_path/$categorydir/$symlink_to" ] ; then
             fetch_src $origin "$tag" "$categorydir/$symlink_from"
-            ln -w -s "$symlink_from" "$work_path/$categorydir/$symlink_to"
+            ln -w -s "$symlink_from" "$srcdir_path/$categorydir/$symlink_to"
         fi
     done
-    (grep '^LOCALES_MAPPED+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from locale ; do
+    (grep '^LOCALES_MAPPED+=' "$srcdir_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r map_from locale ; do
         build_locale_category \
             "$origin" \
             "$tag" \
@@ -183,7 +195,7 @@ build_locales_category()
             "$cldr_version" \
             "$categorydir/$map_from.src"
     done
-    (grep '^SAME+=' "$work_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
+    (grep '^SAME+=' "$srcdir_path/$makefile" | sed 's/.*=//;s/#.*//') | while read -r symlink_from symlink_to ; do
         build_locale_category \
             "$origin" \
             "$tag" \
@@ -198,7 +210,7 @@ build_locales_category()
             "$cldr_version" \
             "$symlink_from"
     done
-    for locale in $(grep '^LOCALES+=' "$work_path/$makefile" | sed 's/.*=//') ; do
+    for locale in $(grep '^LOCALES+=' "$srcdir_path/$makefile" | sed 's/.*=//') ; do
         build_locale_category \
             "$origin" \
             "$tag" \
@@ -231,7 +243,7 @@ build_locales()
         build_locales_category "$origin" "$tag" "share/numericdef_unicode" "LC_NUMERIC"
     fi
 
-    echo "$output/$origin"
+    echo "$builddir/$origin"
 }
 
 scan_tags()
@@ -243,10 +255,6 @@ scan_tags()
     my_rel_major="$(echo $my_rel | sed 's|\..*||')"
     my_rel_minor="$(echo $my_rel | sed 's|^[^.]*\.||')"
     last_rel=""
-
-    if [ "$list_only" != "0" ] ; then
-        printf "%-12s %s\n" "NAME" "TAG"
-    fi
 
     for tag in $(git ls-remote \
             --tags "https://github.com/freebsd/freebsd-src" | \
@@ -261,37 +269,38 @@ scan_tags()
         rel_minor="$(echo $rel | sed 's|^[^.]*\.||')"
 
         if [ "$rel" = "$last_rel" ] ; then
-            # skip non-latest unless --list-more
-            if [ "$list_only" -lt "2" ] ; then continue ; fi
-            # no friendly origin name for non-lastest
+            # skip non-latest unless --outdated
+            if [ "$outdated" = "0" ] ; then continue ; fi
+            # no friendly origin name for non-lastest tags
             origin=""
         else
             last_rel="$rel"
             origin="freebsd$rel"
         fi
 
-        # --release name match?
-        if [ "$origin_filter" = "$origin" ] ; then
-            if [ "$list_only" = "0" ] ; then
-                build_locales "$origin" "$tag"
-                break
-	    fi
-        fi
-
-        if [ "$list_only" == "2" ] ; then
-              # oldest version using modern localedef pipeline
-	      if [ "$rel_major" -lt 11 ] ; then continue ; fi
-        else
-              # oldest version stamped with CLDR versions
-	      if [ "$rel_major" -lt 13 ] ; then continue ; fi
+        # "build <origin>" non-match?
+        if [ -n "$origin_filter" -a "$origin_filter" != "$origin" ] ; then
+            continue
 	fi
 
-        # Skip if newer than the host's localedef.
-        if [ "$rel_major" -gt "$my_rel_major" ] ; then
-            continue
-        elif [ "$rel_major" -eq "$my_rel_major" -a \
-            "$rel_minor" -gt "$my_rel_minor" ] ; then
-            continue
+	# 13.0 is where CLDR version stamps that PostgreSQL cares about began.
+	# Not much point in listing older releases unless --outdated.  11.0 is
+	# where the modern localedef toolchain began and should work?
+        if [ "$outdated" = "1" ] ; then
+            if [ "$rel_major" -lt 11 ] ; then continue ; fi
+	else
+            if [ "$rel_major" -lt 13 ] ; then continue ; fi
+	fi
+
+	# Skip newer than the host's localedef, unless --newer-than-host
+	# specified, since that seems like it might lead to problems.
+	if [ "$newer_than_host" = "0" ] ; then
+            if [ "$rel_major" -gt "$my_rel_major" ] ; then
+                continue
+            elif [ "$rel_major" -eq "$my_rel_major" -a \
+                "$rel_minor" -gt "$my_rel_minor" ] ; then
+                continue
+	    fi
         fi
 
         if [ "$list_only" != "0" ] ; then
@@ -302,48 +311,82 @@ scan_tags()
     done
 }
 
+do_list()
+{
+    printf "%-12s %s\n" "ORIGIN" "TAG"
+    scan_tags 1
+}
+
+do_build()
+{
+    origin="$1"
+
+    if [ "$create_origin_modifier" = "1" ] ; then
+        if [ -n "$custom_tag" -a -n "$origin" ] ; then
+            echo "An origin must be provided when using explicit --tag,"
+            echo "unless --no-origin-modifier is set."
+            exit 1
+	fi
+    fi
+    scan_tags 0 "$origin"
+}
+
+
 show_help()
 {
     cat >&2 <<EOF
 
-Usage: $0 [-v|--verbose] [-b|--builddir <path>] command
+Usage: $0 [options...] command
 
- where command is:
+ Options:
 
-  -l|--list                  list available releases
-  -r|--release name          cross-compile locales of named release
-  -a|--all                   cross-compile locales of lastest releases
-  -i|--install [prefix]      install cross-compiled locales
-  -p|--package [destdir]     package cross-compiled locales
+  -V|--verbose                log activity
 
- Options and commands for finer control:
+  -O|--outdated               list non-latest-patch releases
+  -N|--newer                  list releases newer host's localedef (!)
 
-  -L|--list-outdated         list non-latest-patch levels too
-  -t|--tag tag name          variant with free-form git tag and name
+  -B|--builddir               where to compile locales (default: build)
+  -S|--srcdir                 where to download/cache data (default: src)
+  -P|--prefix                 package install prefix (default: /usr/local)
 
- To query a different Github repo instead of the offical FreeBSD
- mirror, or a local repo:
+  -T|--tag                    specify a freeform Git tag to build
+  -U|--github-user user       Github user (default: freebsd)
+  -R|--github-repo repo       Github repo (default: freebsd-src)
+  -G|--git-local-path path    query local repo instead of Github
 
-  --github-user user         alternative Github user
-  --github-repo repo         alternative Github repo
-  --git-local local_path     use a local mirror
+     --version-modifier       prefix for version modifiers (default: cldr)
+     --no-version-modifier    don't create locale@version symlinks
+     --no-origin-modifier     don't create locale@origin symlinks
+
+ Commands:
+
+  list                        list available origins (FreeBSD releases)
+  build [origin]              cross-compile locales from one or all origins
+  install                     install cross-compiled locales
+  package                     package cross-compiled locales
 
 EOF
 }
  
-verbose=0
-output="build"
-work="work"
-
 while : ; do
     case "$1" in
-        -v|--verbose)        verbose=1; shift;;
-        -b|--builddir)       output="$1"; shift;;
-        -l|--list)           scan_tags 1; break;;
-        -L|--list-outdated)  scan_tags 2; break;;
-        -a|--all)            scan_tags 0; break;;
-        -r|--release)        scan_tags 0 "$2"; break;;
-        -t|--tag)            build_locales "$3" "$2"; break;;
-        *)                   show_help; exit 1;;
+        -V|--verbose)         verbose=1; shift;;
+        -O|--outdated)        outdated=1; shift;;
+        -N|--newer-than-host) newer_than_host=1; shift;;
+        -B|--builddir)        builddir="$2"; shift; shift;;
+        -S|--srcdir)          srcdir="$2"; shift; shift;;
+        -P|--prefix)          prefix="$2"; shift; shift;;
+
+        -T|--tag)             custom_tag="$2"; shift; shift;;
+        -U|--github-user)     github_user="$2"; shift; shift;;
+        -R|--github-repo)     github_repo="$2"; shift; shift;;
+        -G|--git-locale-path) git_locale_path="$2"; shift; shift;;
+
+        list)                 do_list; break;;
+        build)                do_build "$2"; break;;
+        install)              do_install; break;;
+        package)              do_pacakge; break;;
+
+        *)                    show_help; exit 1;;
     esac
 done
