@@ -253,6 +253,7 @@ fetch_release_tags()
         grep -v '_cvs'"
     fi
 
+    mkdir -p "$srcdir"
     sh -c "$git_command" | \
         grep -v '_cvs$' | \
         grep '^release/[0-9][0-9]*\.[0-9][0-9]*\.' | \
@@ -313,7 +314,7 @@ scan_release_tags()
     found="1"
     case $action in
         SHOW) printf "%-12s %s\n" "$origin" "$tag";;
-            BUILD) echo build_locales "$origin" "$tag";;
+            BUILD) build_locales "$origin" "$tag";;
             VALIDATE) ;;
         esac
     done
@@ -333,15 +334,16 @@ show_help()
     cat >&2 <<EOF
 
 A script to compile locale definitions from older OS releases.  FreeBSD
-version.
+version.  https://github.com/macdice/xlocales
 
 Usage: $0 [options...] command
 
  Options:
 
+  -h|--help                    display this help
   -v|--verbose                 log activity
 
-  -o|--outdated                list non-latest-patch releases and < 13.0
+  -o|--outdated                list/build non-latest and < FreeBSD 13.0
   -n|--newer                   list releases newer than host localedef (!)
 
   -b|--builddir                where to compile locales (default: build)

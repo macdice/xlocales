@@ -1,15 +1,24 @@
 # XLOCALES
 
 This is an experimental attempt to backport locales definitions from older
-releases of glibc (including different distributions) and FreeBSD.
+releases, currently supporting glibc (including different distributions) and
+FreeBSD.
 
-## Quick start
+The short names of OS releases are referred to as "origins", for example
+`debian12`, `rocky10`, `freebsd13.4`.  On glibc systems, the verson of glibc
+that supplied the localedata is referred to as the "version", and on FreeBSD
+systems the CLDR version that was used to generate the `LC_COLLATE` category is
+the "version".
 
-Build backported locales in subdirectory "xlocales":
+## Building everything available
+
+Build all available backported locales, creating subdirectory "build":
 
     $ ./xlocales build
 
-### Choosing a subset on glibc:
+## Building a subset
+
+On a GNU/Linux system:
 
     $ ./xlocales list
     ORIGIN
@@ -21,11 +30,9 @@ Build backported locales in subdirectory "xlocales":
     rocky9
     rocky8
     ...
-    $ ./xlocales build rocky* ubuntu*
+    $ ./xlocales build rocky9 rocky10 ubuntu*
 
-### Choosing a subset on FreeBSD
-
-FreeBSD locale sources are fetched from git:
+On a FreeBSD system:
 
     $ ./xlocales list
     ORIGIN       TAG
@@ -35,15 +42,53 @@ FreeBSD locale sources are fetched from git:
     ...
     $ ./xlocales build freebsd14* freebsd13.4
 
-### Creating packages for installation
+## Installing
 
+To create packages that install the locales under `/usr/lib/xlocales` (glibc) or
+`/usr/locale/lib/xlocales` in .rpm, .deb or .pkg format as appropriate:
+
+    $ ./xlocales build
     $ ./xlocales package
 
-### Using backported locales
+That creates a set of packages from the contents of `xlocales`, for example:
 
-   
+    xlocales-debian14
+    xlocales-debian13
+    xlocales-debian12
+    xlocales-debian14-system
+    xlocales-debian13-system
+    xlocales-debian12-system
 
-Access those locales by setting LOCPATH (glibc) or PATH_LOCALE (FreeBSD) to point to 
+The optional `-system` packages add symlinks in the system default locale
+search path, so that all programs can access them with modifiers such as
+`en_US.utf8@debian13` without environment changes.
+
+## Using backported locales
+
+There are three main approaches:
+
+- Setting the environment to use backported locales instead of the system
+  locales
+- Setting the environment to expose the backported locales with different names
+  that have `@origin` or `@version` modifiers
+- Installing the optional `xlocales-*-system` packages so that the default
+  locale search path sees `@origin` and/or `@version` modifiers
+
+The environment variable to set to affect just one process tree is `LOCPATH`
+(glibc) or `PATH_LOCALE` (FreeBSD).  In the following sections, `XLOCALES`
+stands for the choosen installation location.
+
+### Replacing the system locales
+
+If you set `LOCPATH`/`PATH_LOCALE` to `$XLOCALES/ORIGIN/locales`, non-modified names from `ORIGIN`  exposes
+non-modified names from `debian12`, hiding system-provided locales of the same
+name:
+
+    export LOCPATH=$XLOCALES/debian13/locales
+
+### Exposing origin modifiers
+
+- 
 
 ## Local installation
 
