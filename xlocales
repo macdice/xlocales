@@ -1,6 +1,6 @@
 #!/bin/sh
 
-if getconf GNU_GLIBC_VERSION > /dev/null 2>&1 ; then
+if getconf GNU_LIBC_VERSION > /dev/null 2>&1 ; then
     exec $0-glibc.sh $@
 elif [ "$(uname)" = "FreeBSD" ] ; then
     exec $0-freebsd.sh $@
