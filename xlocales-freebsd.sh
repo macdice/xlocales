@@ -389,15 +389,16 @@ while : ; do
         --no-origin-modifier)  create_origin_modifer=0; shift;;
         --no-version-modifier) create_version_modifer=0; shift;;
 
-        list)                  shift
-                               fetch_release_tags
-                               printf "%-12s %s\n" "ORIGIN" "TAG"
-                               if [ $# -eq 0 ] ; then
-                                   scan_release_tags "SHOW" "*"
-                               else
-                                   for origin_pattern in $@ ; do
-                                       scan_release_tags "SHOW" "$origin_pattern"
-                   done
+        list)
+	    shift
+            fetch_release_tags
+            printf "%-12s %s\n" "ORIGIN" "TAG"
+            if [ $# -eq 0 ] ; then
+                scan_release_tags "SHOW" "*"
+            else
+                for origin_pattern in $@ ; do
+                    scan_release_tags "SHOW" "$origin_pattern"
+                 done
                                fi
                    break
                    ;;
