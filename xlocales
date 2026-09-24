@@ -1,0 +1,43 @@
+#!/bin/sh
+
+if getconf GNU_GLIBC_VERSION > /dev/null 2>&1 ; then
+    exec $0-glibc.sh $@
+elif [ "$(uname)" = "FreeBSD" ] ; then
+    exec $0-freebsd.sh $@
+else
+    # What other systems could this support?
+    #
+    # * musl, openbsd and netbsd just punt strcoll() to strcmp(), so there is
+    #   no point
+    #
+    # * macos could probably be done, but some things are missing:
+    #
+    #   In v79 of Apple adv_cmds, localedef was a perl script, and in that era
+    #   strcoll() was taken from ancient pre-Unicode FreeBSD libc, and the
+    #   locale sources were here:
+    #
+    #   https://github.com/apple-oss-distributions/adv_cmds/tree/rel/adv_cmds-79/usr-share-locale.tproj
+    #
+    #   In modern Apple adv_cmds, localedef is Garrett D'Amore's
+    #   implementation, originally from illumos (OpenSolaris never shipped
+    #   Sun's implementation for some reason so the illumos crew had to write a
+    #   new one), used on FreeBSD 11+ and Apple is clearly getting it from
+    #   FreeBSD because it has has the -V option from FreeBSD 13,+ that it
+    #   designed to expose versions with querylocale(LC_VERSION_MASK |
+    #   LC_COLLATE_MASK, locale):
+    #
+    #   https://github.com/apple-oss-distributions/adv_cmds/tree/main/localedef
+    #
+    #   Problem #1: they no longer publish the locale source files!  Or not in
+    #   the adv_cmds package, anyway.  Anyone know where they can be found?
+    #   They presumably have D'Amore's scripts for converting from CLDR to
+    #   locale source files.
+    #
+    #   Problem #2: they have FreeBSD's querylocale() (which FreeBSD originally
+    #   got from Apple), but they have stripped out the LC_VERSION_MASK
+    #   support leaving just a comment:
+    #
+    #   https://github.com/apple-oss-distributions/Libc/blob/main/locale/xlocale.c
+    echo "Unknown environment, patches welcome" >&2
+    exit 1
+fi

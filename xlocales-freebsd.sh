@@ -332,7 +332,8 @@ show_help()
 {
     cat >&2 <<EOF
 
-A script to compile locale definitions from older FreeBSD releases.
+A script to compile locale definitions from older OS releases.  FreeBSD
+version.
 
 Usage: $0 [options...] command
 
@@ -390,7 +391,7 @@ while : ; do
         --no-version-modifier) create_version_modifer=0; shift;;
 
         list)
-	    shift
+            shift
             fetch_release_tags
             printf "%-12s %s\n" "ORIGIN" "TAG"
             if [ $# -eq 0 ] ; then
@@ -398,39 +399,41 @@ while : ; do
             else
                 for origin_pattern in $@ ; do
                     scan_release_tags "SHOW" "$origin_pattern"
-                 done
-                               fi
-                   break
-                   ;;
-        build)                 shift
-                               case $1 in
-                                   -t|--tag)
-                                       shift
-                       if [ -a $# -ne 2 ] ; then
-                                           echo "expected: build --tag <tag> <origin>'"
-                                           exit 1
-                                       fi
-                       build_locales "$2" "$1"
-                       ;;
-                                   "")
-                                       fetch_release_tags
-                                       scan_release_tags "BUILD" "*"
-                       ;;
-                                   *)
-                                       fetch_release_tags
-                                       for origin_pattern in $@ ; do
-                                           scan_release_tags "VALIDATE" "$origin_pattern"
-                                       done
-                                       for origin_pattern in $@ ; do
-                                           scan_release_tags "BUILD" "$origin_pattern"
-                                       done
-                       ;;
-                               esac
-                   break
-                   ;;
-        install)               do_install; break;;
-        package)               do_package; break;;
+                done
+            fi
+            break
+            ;;
 
-        *)                     show_help; exit 1;;
+        build)
+            shift
+            case $1 in
+                -t|--tag)
+                    shift
+                    if [ -a $# -ne 2 ] ; then
+                        echo "expected: build --tag <tag> <origin>'"
+                        exit 1
+                    fi
+                    build_locales "$2" "$1"
+                    ;;
+                "")
+                    fetch_release_tags
+                    scan_release_tags "BUILD" "*"
+                    ;;
+                *)
+                    fetch_release_tags
+                    for origin_pattern in $@ ; do
+                        scan_release_tags "VALIDATE" "$origin_pattern"
+                    done
+                    for origin_pattern in $@ ; do
+                        scan_release_tags "BUILD" "$origin_pattern"
+                    done
+                    ;;
+            esac
+            break
+            ;;
+
+        install) do_install; break;;
+        package) do_package; break;;
+        *) show_help; exit 1;;
     esac
 done
