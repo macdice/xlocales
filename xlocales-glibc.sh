@@ -1,6 +1,6 @@
 #!/usr/bin/sh
 #
-# Compile historical glibc locale data, with any patches that distributions
+# Compile historical glibc locale data, with any patches that origins
 # might have applied.
 
 set -e
@@ -16,28 +16,37 @@ version_prefix="glibc"
 
 localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
+fetch_file()
+{
+	origin="$1"
+	url="$2"
+	destdir="$3"
+
+	printf "$origin/
+}
+
 fetch_locales_deb()
 {
-    distribution="$1"
+    origin="$1"
     url="$2"
     package="$(basename $url)"
 
-    mkdir -p "$srcdir/$distribution/charmaps"
+    mkdir -p "$srcdir/$origin/charmaps"
 
     # pull down the package if we haven't already
-    package_path="$srcdir/$distribution/$package"
+    package_path="$srcdir/$origin/$package"
     if [ ! -f "$package_path" ] ; then
-        echo "Fetching $distribution package $package from $url"
+        echo "Fetching $origin package $package from $url"
         curl -f -s -S "$url" > "$package_path.tmp"
         mv "$package_path.tmp" "$package_path"
     fi
 
     # unpack the interesting contents into fakeroot if we haven't already
-    fakeroot_path="$srcdir/$distribution/fakeroot"
+    fakeroot_path="$srcdir/$origin/fakeroot"
     if [ ! -e "$fakeroot_path" ] ; then
         rm -fr "$fakeroot_path.tmp"
         mkdir -p "$fakeroot_path.tmp"
-        echo "Extracting $distribution package $package..."
+        echo "Extracting $origin package $package..."
         (
             cd "$fakeroot_path.tmp"
             ar x "../../../$package_path"
@@ -48,13 +57,13 @@ fetch_locales_deb()
     fi
 
     # unpack the charsets if we haven't already
-    charmaps_path="$srcdir/$distribution/charmaps"
+    charmaps_path="$srcdir/$origin/charmaps"
     for charmap_gz in $(ls "$fakeroot_path/usr/share/i18n/charmaps") ; do
         charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
         charmap="$(basename "$charmap_gz" .gz)"
         charmap_path="$charmaps_path/$charmap"
         if [ ! -e "$charmap_path" ] ; then
-            echo "Extracting $distribution charmap $charmap..."
+            echo "Extracting $origin charmap $charmap..."
             gzip -d < "$charmaps_gz_path/$charmap_gz" > "$charmap_path.tmp"
             mv "$charmap_path.tmp" "$charmap_path"
         fi
@@ -63,11 +72,11 @@ fetch_locales_deb()
 
 compile_locales()
 {
-    distribution="$1"
+    origin="$1"
     version="$2"
 
-    fakeroot_path="$srcdir/$distribution/fakeroot"
-    supported_path="$srcdir/$distribution/SUPPORTED"
+    fakeroot_path="$srcdir/$origin/fakeroot"
+    supported_path="$srcdir/$origin/SUPPORTED"
 
     if [ -e "$fakeroot_path/usr/share/i18n/SUPPORTED" ] ; then
         # debian includes a SUPPORTED file in a convenient format
@@ -98,9 +107,9 @@ compile_locales()
         mv "$supported_path.tmp" "$supported_path"
     fi
 
-    mkdir -p "$builddir/$distribution/plain"
-    mkdir -p "$builddir/$distribution/veresion-mod"
-    mkdir -p "$builddir/$distribution/origin-mod"
+    mkdir -p "$builddir/$origin/plain"
+    mkdir -p "$builddir/$origin/veresion-mod"
+    mkdir -p "$builddir/$origin/origin-mod"
 
     # compile all locales if we haven't already
     while read -r name charmap ; do
@@ -108,12 +117,12 @@ compile_locales()
       name_charmap="$(echo "$name" | sed 's/^[^.]*//')"
       name_charmap_munged="$(echo "$name_charmap" | sed 's/[^.a-zA-Z0-9]//g' | tr '[:upper:]' '[:lower:]')"
 
-      locale_path="$builddir/$distribution/plain/$name_base$name_charmap_munged"
-      version_mod_path="$builddir/$distribution/veresion-mod/$name_base$name_charmap_munged@$version"
-      system_mod_path="$builddir/$distribution/origin-mod/$name_base$name_charmap_munged@$distribution"
+      locale_path="$builddir/$origin/plain/$name_base$name_charmap_munged"
+      version_mod_path="$builddir/$origin/veresion-mod/$name_base$name_charmap_munged@$version"
+      system_mod_path="$builddir/$origin/origin-mod/$name_base$name_charmap_munged@$origin"
 
-      locale_input="$srcdir/$distribution/fakeroot/usr/share/i18n/locales/$name_base"
-      charmap_input="$srcdir/$distribution/charmaps/$charmap"
+      locale_input="$srcdir/$origin/fakeroot/usr/share/i18n/locales/$name_base"
+      charmap_input="$srcdir/$origin/charmaps/$charmap"
 
       if [ ! -e "$locale_path" ] ; then
          echo "Compiling $locale_path..."
@@ -124,9 +133,9 @@ compile_locales()
          # that glibc hasn't silently truncated a modifier used when opening
          # the locale, which is otherwise undetectable via POSIX APIs.
          locale_input_rev="$locale_input.rev"
-         sed "s/^\(revision *\".*\)\"$/\1; distribution=$distribution; localedef=$localedef_version; localedata=$version\"/" < $locale_input > $locale_input_rev
+         sed "s/^\(revision *\".*\)\"$/\1; origin=$origin; localedef=$localedef_version; localedata=$version\"/" < $locale_input > $locale_input_rev
 
-         I18NPATH="$srcdir/$distribution/fakeroot/usr/share/i18n" localedef -f "$charmap_input" -i "$locale_input_rev" "$locale_path.tmp"
+         I18NPATH="$srcdir/$origin/fakeroot/usr/share/i18n" localedef -f "$charmap_input" -i "$locale_input_rev" "$locale_path.tmp"
          mv "$locale_path.tmp" "$locale_path"
          rm -fr "$version_mod_path" "$system_mod_path"
          ln -s "../plain/$name_base$name_charmap_munged" "$version_mod_path"
@@ -137,24 +146,24 @@ compile_locales()
 
 import_locales_deb()
 {
-    distribution="$1"
+    origin="$1"
     url="$2"
     version="$3"
 
-    echo "Importing locales from $distribution..."
+    echo "Importing locales from $origin..."
 
-    fetch_locales_deb "$distribution" "$url"
-    compile_locales "$distribution" "$version"
+    fetch_locales_deb "$origin" "$url"
+    compile_locales "$origin" "$version"
 }
 
 # Handles Debian and Ubuntu
 import_locales_debianlike_latest()
 {
-    distribution="$1"
+    origin="$1"
     codename="$2"
     repo_base_url="$3"
 
-    package_list="$srcdir/$distribution/Packages"
+    package_list="$srcdir/$origin/Packages"
 
     # In older Debian and all Ubuntu there is no "binary-all" so we have to
     # look in "binary-amd64"
@@ -172,7 +181,7 @@ import_locales_debianlike_latest()
         mv "$package_list.tmp" "$package_list"
     fi
 
-    package_info="$srcdir/$distribution/locales.package"
+    package_info="$srcdir/$origin/locales.package"
     if [ ! -e "$package_info" ] ; then
         awk 'BEGIN { in_zone = 0; } /^Package: locales$/ { in_zone = 1; print; } /^ *$/ { in_zone = 0; } in_zone { print; }' "$package_list" > "$package_info.tmp"
         mv "$package_info.tmp" "$package_info"
@@ -187,12 +196,12 @@ import_locales_debianlike_latest()
     # changes could be material changes...
     version="$( echo $package_version | sed 's/-.*$//' )"
 
-    import_locales_deb "$distribution" "$package_url" "$version"
+    import_locales_deb "$origin" "$package_url" "$version"
 }
 
 import_locales_debian_latest()
 {
-    distribution="$1"
+    origin="$1"
     codename="$2"
 
     # figure out if it's in current or archive repos
@@ -202,50 +211,50 @@ import_locales_debian_latest()
         repo_base_url="http://ftp.debian.org/debian"
     fi
 
-    import_locales_debianlike_latest "$distribution" "$codename" "$repo_base_url"
+    import_locales_debianlike_latest "$origin" "$codename" "$repo_base_url"
 }
 
 import_locales_ubuntu_latest()
 {
-    distribution="$1"
+    origin="$1"
     codename="$2"
 
     repo_base_url="https://archive.ubuntu.com/ubuntu"
 
-    import_locales_debianlike_latest "$distribution" "$codename" "$repo_base_url"
+    import_locales_debianlike_latest "$origin" "$codename" "$repo_base_url"
 }
 
 fetch_locales_rpm()
 {
-    distribution="$1"
+    origin="$1"
     glibc_url="$2"
     glibc_package="$(basename $glibc_url)"
     locale_url="$3"
     locale_package="$(basename $locale_url)"
     version="$4"
 
-    mkdir -p "$srcdir/$distribution/charmaps"
+    mkdir -p "$srcdir/$origin/charmaps"
 
     # pull down the packages if we haven't already
-    glibc_package_path="$srcdir/$distribution/$glibc_package"
+    glibc_package_path="$srcdir/$origin/$glibc_package"
     if [ ! -f "$glibc_package_path" ] ; then
-        echo "Fetching $distribution package $glibc_package from $glibc_url"
+        echo "Fetching $origin package $glibc_package from $glibc_url"
         curl -f -s -S "$glibc_url" > "$glibc_package_path.tmp"
         mv "$glibc_package_path.tmp" "$glibc_package_path"
     fi
-    locale_package_path="$srcdir/$distribution/$locale_package"
+    locale_package_path="$srcdir/$origin/$locale_package"
     if [ ! -f "$locale_package_path" ] ; then
-        echo "Fetching $distribution package $locale_package from $locale_url"
+        echo "Fetching $origin package $locale_package from $locale_url"
         curl -f -s -S "$locale_url" > "$locale_package_path.tmp"
         mv "$locale_package_path.tmp" "$locale_package_path"
     fi
 
     # unpack the interesting contents into fakeroot if we haven't already
-    fakeroot_path="$srcdir/$distribution/fakeroot"
+    fakeroot_path="$srcdir/$origin/fakeroot"
     if [ ! -e "$fakeroot_path" ] ; then
         rm -fr "$fakeroot_path.tmp"
         mkdir -p "$fakeroot_path.tmp"
-        echo "Extracting $distribution package..."
+        echo "Extracting $origin package..."
         (
             cd "$fakeroot_path.tmp"
             rpm2cpio "../../../$locale_package_path" | cpio -idmv
@@ -262,13 +271,13 @@ fetch_locales_rpm()
     fi
 
     # unpack the charsets if we haven't already
-    charmaps_path="$srcdir/$distribution/charmaps"
+    charmaps_path="$srcdir/$origin/charmaps"
     for charmap_gz in $(ls "$fakeroot_path/usr/share/i18n/charmaps") ; do
         charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
         charmap="$(basename "$charmap_gz" .gz)"
         charmap_path="$charmaps_path/$charmap"
         if [ ! -e "$charmap_path" ] ; then
-            echo "Extracting $distribution charmap $charmap..."
+            echo "Extracting $origin charmap $charmap..."
             gzip -d < "$charmaps_gz_path/$charmap_gz" > "$charmap_path.tmp"
             mv "$charmap_path.tmp" "$charmap_path"
         fi
@@ -277,22 +286,22 @@ fetch_locales_rpm()
 
 import_locales_rpm()
 {
-    distribution="$1"
+    origin="$1"
     glibc_url="$2"
     locale_url="$3"
     locale_version="$4"
 
-    echo "Importing locales from $distribution..."
+    echo "Importing locales from $origin..."
 
-    fetch_locales_rpm "$distribution" "$glibc_url" "$locale_url" "$locale_version"
-    compile_locales "$distribution" "$locale_version"
+    fetch_locales_rpm "$origin" "$glibc_url" "$locale_url" "$locale_version"
+    compile_locales "$origin" "$locale_version"
 }
 
 import_locales_rocky_latest()
 {
-    distribution="$1"
+    origin="$1"
 
-    major_version="$(echo "$distribution" | sed 's/^[^0-9]*//')"
+    major_version="$(echo "$origin" | sed 's/^[^0-9]*//')"
     case "$major_version" in
       "8") locale_base_url="https://download.rockylinux.org/pub/rocky/$major_version/BaseOS/x86_64/kickstart/Packages/g/";;
       *) # gotta find the latest minor version first
@@ -310,7 +319,7 @@ import_locales_rocky_latest()
     glibc_filename="$(curl -f -s -S "$glibc_base_url" | grep '"glibc-' | sed 's/.*href="//;s/".*//' | tail -1)"
     glibc_url="$glibc_base_url/$glibc_filename"
 
-    import_locales_rpm "$distribution" "$glibc_url" "$locale_url" "$locale_version"
+    import_locales_rpm "$origin" "$glibc_url" "$locale_url" "$locale_version"
 }
 
 case $1 in
@@ -336,6 +345,6 @@ case $1 in
   # This seems to be knowledge baked into localedef, not the data files, so I
   # guess you'd need to patch it to go back further...
 
-  *) echo "Usage: $0 <distribution>, where distribution is in:
+  *) echo "Usage: $0 <origin>, where origin is in:
   debian10..14, ubuntu18..26, rocky8..10"; exit 1;;
 esac
