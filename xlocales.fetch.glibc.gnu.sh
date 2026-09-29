@@ -1,5 +1,4 @@
 xlocales_gnu_url="https://ftp.gnu.org/gnu/glibc"
-xlocales_gnu_min=2.28
 
 xlocales_gnu_desc()
 {
@@ -10,15 +9,16 @@ xlocales_gnu_list()
 {
     index_file="$xlocales_cache/gnu/index.html"
     
-    localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
     fetch_src "$xlocales_gnu_url/" "$index_file"
-    for v in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
-	# skip ancient localedata
-	if ! xlocales_version_le "$xlocales_gnu_min" "$v" ; then continue ; fi	
-	# skip localedata newer than localedef
-	if ! xlocales_version_le "$v" "$localedef_version" ; then continue ; fi
-	echo "gnu$v" "$v"
+    for locale_version in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
+	if ! xlocales_version_le "$xlocales_min_libc_version" "$locale_version" ; then
+	    continue
+	fi
+	if ! xlocales_version_le "$locale_version" "$xlocales_max_libc_version" ; then
+	    continue
+	fi
+	echo "gnu$locale_version" "$locale_version"
     done
 }
 
@@ -52,6 +52,7 @@ xlocales_gnu_fetch()
 			   "glibc-$version/localedata/locales" \
 			   "glibc-$version/localedata/charmaps" \
 			   "$url" \
+			   "$version" \
 			   "$version"
 }
 
@@ -76,6 +77,7 @@ xlocales_gnu_configure()
     charmaps_dir="$3"
     url="$4"
     locale_version="$5"
+    package_version="$6"
     
     src="$xlocales_src/$origin"
 
@@ -106,7 +108,6 @@ xlocales_gnu_configure()
     case "$xlocales_package" in
 	deb)
 	    package_arch="$(dpkg --print-architecture)"
-	    package_version="$locale_version"
 	    echo "PACKAGES+=../../xlocales-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
 	    mkdir -p "$src/xlocales-$origin/DEBIAN"
 	    if [ "$source" = "$xlocales_host_os" ] ; then
@@ -118,6 +119,7 @@ xlocales_gnu_configure()
 Package: xlocales-$origin
 Version: $package_version
 Architecture: $package_arch
+Depends: libc6 (>= $localedef_version), libc6 (<< $localedef_version+)
 Maintainer: $xlocales_maintainer
 Homepage: $xlocales_homepage
 Description: Locales from $origin compiled for $xlocales_host_origin
@@ -137,7 +139,7 @@ EOF
 	    mkdir -p "$src/xlocales-system-$origin/DEBIAN"
 	    cat <<EOF > "$src/xlocales-system-$origin/DEBIAN/control"
 Package: xlocales-system-$origin
-Version: $locale_version
+Version: $package_version
 Architecture: $package_arch
 Depends: xlocales-$origin (= $package_version)
 Maintainer: $xlocales_maintainer
@@ -150,7 +152,7 @@ EOF
 	    mkdir -p "$src/xlocales-system-glibc-$origin/DEBIAN"
 	    cat <<EOF > "$src/xlocales-system-glibc-$origin/DEBIAN/control"
 Package: xlocales-system-glibc-$origin
-Version: $locale_version
+Version: $package_version
 Architecture: $package_arch
 Depends: xlocales-$origin (= $package_version)
 Maintainer: $xlocales_maintainer

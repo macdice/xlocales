@@ -28,40 +28,32 @@ fi
 xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
 
 case "$ID" in
-    freebsd) xlocales_host_libc_version="$host_version"
+    freebsd) xlocales_max_libc_version="$host_version"
+	     xlocales_min_libc_version="11.0"
              xlocales_version_mod_prefix="cldr"
 	     xlocales_default_source="freebsd"
 	     xlocales_sources="freebsd"
-	     . "$xlocales_script_basename.fetch.freebsd.sh"
              xlocales_jobs="$(sysctl -n hw.cpu)"	     
              xlocales_prefix="/usr/local"
 	     xlocales_infix="share"
-	     xlocales_system_locales="/usr/share/locales"
+	     xlocales_system_locales="/usr/share/locale"
 	     xlocales_package="pkg"
+	     . "$xlocales_script_basename.fetch.freebsd.sh"
 	     ;;
     
-    *)       xlocales_host_libc_version="$(getconf GNU_LIBC_VERSION | \
-                                         sed 's/.* \([0-9]\.[0-9][0-9]*\)$/\1/')"
-             if [ "$?" != "0" -o -z "$xlocales_host_libc_version" ] ; then
+    *)       xlocales_max_libc_version="$(getconf GNU_LIBC_VERSION | \
+                         		sed 's/.* \([0-9]\.[0-9][0-9]*\)$/\1/')"
+             if [ "$?" != "0" -o -z "$xlocales_max_libc_version" ] ; then
 		 echo "Host libc/localedef not supported."
 		 exit 1
-	     fi	     
+	     fi
+	     xlocales_min_libc_version="2.28"
 	     xlocales_version_mod_prefix="glibc"
 	     xlocales_default_source="gnu"
-	     for module in $(ls $xlocales_script_basename.fetch.glibc.*.sh) ; do
-		 module_os="$(echo "$module" | sed 's/.*\.fetch\.glibc\.\(.*\)\.sh/\1/')"
-		 . "$xlocales_script_basename.fetch.glibc.${module_os}.sh"
-                 xlocales_sources="$xlocales_sources $module_os"
-		 if [ "$module_os" = "$xlocales_host_os" ] ; then
-		     # if it matches the host OS, make it the default source
-		     xlocales_default_source="$module_os"
-		 fi
-	     done	     
              xlocales_jobs="$(nproc)"
              xlocales_prefix="/usr"
 	     xlocales_infix="lib"
 	     xlocales_system_locales="/usr/lib/locale"
-
 	     if [ -e "/var/lib/dpkg" ] ; then
 		 xlocales_package="deb"
 	     elif [ -e "/var/lib/rpm" ] ; then
@@ -69,6 +61,15 @@ case "$ID" in
 	     else
 		 xlocales_package="tar";
 	     fi
+
+	     for module in $(ls $xlocales_script_basename.fetch.glibc.*.sh) ; do
+		 module_os="$(echo "$module" | sed 's/.*\.fetch\.glibc\.\(.*\)\.sh/\1/')"
+		 . "$xlocales_script_basename.fetch.glibc.${module_os}.sh"
+                 xlocales_sources="$xlocales_sources $module_os"
+		 if [ "$module_os" = "$xlocales_host_os" ] ; then
+		     xlocales_default_source="$module_os"
+		 fi
+	     done 
 	     ;;
 esac
 
@@ -76,7 +77,7 @@ esac
 # semantics.
 xlocales_version_le()
 {
-    printf "%s\n%s\n" $1 $2 | sort -CV
+    printf '%s\n%s\n' "$1" "$2" | sort -CV
 }
 
 origin_get_source()
@@ -100,6 +101,7 @@ Usage: $0 [options...] command
    -c|--cache path            where to cache temporary files (default: $xlocales_cache)
    -p|--prefix path           installation prefix (default: $xlocales_prefix)
    -j|--jobs N                how many CPUs to use (default: $xlocales_jobs)
+      --clear-cache           wipe cached meta-data files when listing/fetching
 
    -H|--homepage "https..."   Maintainer URL included in packages
    -M|--maintainer "..."      Maintainer "name <email>" included in packages
@@ -109,6 +111,7 @@ Usage: $0 [options...] command
    list [source]              lists (default: $xlocales_default_source)
    fetch [source|origin]...   fetches, unpacks, creates makefiles
    build [source|origin]...   builds and packages
+   clean [source|origin]...   wipe all temporary files
 
  Host information:
    OS:                        $xlocales_host_os
@@ -130,7 +133,7 @@ fetch_src()
 
     if [ ! -e "$dst" ] ; then
 	mkdir -p "$(dirname "$dst")"
-	echo "Fetching file: $url"
+	echo "Fetching file: $url" >&2
 	curl -f -s -S "$url" > "$dst.tmp"
 	mv "$dst.tmp" "$dst"
     fi
@@ -140,7 +143,12 @@ fetch_source()
 {
     source="$1"
 
-    echo "Fetching all origins for source: $source"
+    echo "Fetching locale data from source: $source" >&2
+    if [ -n "$xlocales_clear_cache" ] ; then
+	rm -fr "$xlocales_cache/$source"
+	rm -fr "$xlocales_cache/$source"*
+    fi
+
     for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
 	fetch_origin "$origin"
     done
@@ -151,7 +159,11 @@ fetch_origin()
     origin="$1"
     source="$(origin_get_source "$origin")"
 
-    #echo "Fetching origin: $origin"
+    if [ -n "$xlocales_clear_cache" ] ; then
+	rm -fr "$xlocales_cache/$origin"
+    fi
+
+    echo "Fetching locale data from origin: $origin" >&2
     xlocales_${source}_fetch "$origin"
 }
 
@@ -196,12 +208,18 @@ while : ; do
 	-R|--rpm)    xlocales_package="rpm"; shift;;
 	-D|--deb)    xlocales_package="deb"; shift;;
 	-P|--pkg)    xlocales_package="$2"; shift; shift;;
+	--clear-cache) xlocales_clear_cache="1"; shift;;
+	--clean)     xlocales_clean="1"; shift;;
 	list)
 	    shift
 	    if [ -n "$1" ] ; then
 		source="$1"
 	    else
 		source="$xlocales_default_source"
+	    fi
+	    if [ -n "$xlocales_clear_cache" ] ; then
+		rm -fr "$xlocales_cache/$source"
+		rm -fr "$xlocales_cache/$source"*
 	    fi
 	    xlocales_${source}_list | cut -f1
 	    break
