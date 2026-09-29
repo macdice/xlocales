@@ -61,6 +61,7 @@ xlocales_build="build"
 xlocales_cache="cache"
 xlocales_src="src"
 xlocales_prefix="/usr/local"
+xlocales_version="1"
 
 xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
 
