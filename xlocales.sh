@@ -1,59 +1,8 @@
 #!/bin/sh
 #
-# A tool for cross-compiling locales.
-#
-# Quick start:
-#
-#   ./xlocales.sh fetch [SOURCE]
-#   ./xlocales.sh build [SOURCE|ORIGIN]
-#   make -j4
-#   make package
-#
-# If a SOURCE is not specified, a default is selected based on the
-# host system.
-#
-# See "./xlocales --help" for a list of supported SOURCE.  See
-# "./xlocales list SOURCE" for a list of ORIGIN values available from
-# a each supported SOURCE.
-#
-# Once packages are installed, locales can be exposed to libc by
-# setting LOCPATH (glibc) or PATH_LOCALE (FreeBSD) to include one or
-# more subdirectory of PREFIX/xlocales, depending on which locale
-# names you want to bring into scope:
-#
-#   xlocales/
-#     SOURCE/
-#       locales@/         @origin + @version names from SOURCE
-#       locales@origin/   @origin names from SOURCE
-#       locales@version/  @version names from SOURCE
-#     ORIGIN/
-#       locales/          unmodified names that hide system locales
-#       locales@/         @origin + @version names from ORIGIN
-#       locales@origin/   @origin names from ORIGIN
-#       locales@version/  @version names from ORIGIN
-#     locales@/           all @origin names + @version names from host OS
-#     locales@origin/     all @origin names
-#     locales@version/    all @version names from host OS
-#
-# Some examples:
-#
-# To run a program with an earlier release of FreeBSD's locales with
-# standard names, hiding the system locales, on a FreeBSD system:
-#
-#   PATH_LOCALE=/usr/local/lib/xlocales/freebsd13.3/locales
-#
-# To make historical locales from the host OS (assuming it is one that
-# is supported as a source) on a glibc system, for example locale
-# names like en_US.utf8@debian12 and en_US.utf8@glibc2.31:
-#
-#   LOC_PATH=/usr/lib/xlocales/locales@
-#
-# To make historical Ubuntu locales with names available in addition
-# to the system locales, using names like en_US.utf8@ubuntu22.04
-# and en_US.utf8@glibc2.31 (= @version) available in addition
-# to the system locales, on a Rocky system:
-#
-#   LOC_PATH=/usr/lib/xlocales/ubuntu/locales@
+# An experimental tool for making old versions of locales available,
+# cross-compiled for the host libc, using various naming schemes to
+# identify them.
 
 set -e
 
@@ -63,7 +12,6 @@ xlocales_src="src"
 xlocales_version="1"
 xlocales_jobs="1"
 xlocales_silent=""
-xlocales_package=""
 xlocales_homepage="https://github.com/macdice/xlocales"
 xlocales_maintainer="Maintainer <name@example.com>"
 
@@ -89,6 +37,7 @@ case "$ID" in
              xlocales_prefix="/usr/local"
 	     xlocales_infix="share"
 	     xlocales_system_locales="/usr/share/locales"
+	     xlocales_package="pkg"
 	     ;;
     
     *)       xlocales_host_libc_version="$(getconf GNU_LIBC_VERSION | \
@@ -112,25 +61,16 @@ case "$ID" in
              xlocales_prefix="/usr"
 	     xlocales_infix="lib"
 	     xlocales_system_locales="/usr/lib/locale"
+
+	     if [ -e "/var/lib/dpkg" ] ; then
+		 xlocales_package="deb"
+	     elif [ -e "/var/lib/rpm" ] ; then
+		 xlocales_package="rpm";
+	     else
+		 xlocales_package="tar";
+	     fi
 	     ;;
 esac
-
-check_source()
-{
-    source="$1"
-    if [ -z "$source" ] ; then
-	echo "$xlocales_default_source"
-	return
-    fi
-    for x in $xlocales_sources ; do
-	if [ "$xlocales_source" = "$x" ] ; then
-	    echo "$x"
-	    return
-	fi
-    done
-    echo "Source \"$1\" is unknown" >&2
-    exit 1    
-}
 
 # "xlocales_version_le x y" tests if x <= y, using sort's -V
 # semantics.
@@ -159,14 +99,11 @@ Usage: $0 [options...] command
    -b|--build path            where to put packages (default: $xlocales_build)
    -c|--cache path            where to cache temporary files (default: $xlocales_cache)
    -p|--prefix path           installation prefix (default: $xlocales_prefix)
-   -j|--ncpus N               how many CPUs to use (default: CPU count)
+   -j|--jobs N                how many CPUs to use (default: $xlocales_jobs)
 
    -H|--homepage "https..."   Maintainer URL included in packages
    -M|--maintainer "..."      Maintainer "name <email>" included in packages
-   -T|--tar                   enable .tgz package creation (default)
-   -D|--deb                   enable .deb package creation
-   -R|--rpm                   enable .rpm package creation
-   -P|--pkg                   enable .pkg package creation (FreeBSD)
+   -P|--package format        one of deb|rpm|pkg|tar|none (default: $xlocales_package)
 
  Commands:
    list [source]              lists (default: $xlocales_default_source)
@@ -258,7 +195,7 @@ while : ; do
 	-T|--tar)    xlocales_package="tar"; shift;;
 	-R|--rpm)    xlocales_package="rpm"; shift;;
 	-D|--deb)    xlocales_package="deb"; shift;;
-	-P|--pkg)    xlocales_package="pkg"; shift;;
+	-P|--pkg)    xlocales_package="$2"; shift; shift;;
 	list)
 	    shift
 	    if [ -n "$1" ] ; then
