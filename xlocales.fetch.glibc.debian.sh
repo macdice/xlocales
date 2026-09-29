@@ -71,6 +71,17 @@ debianoid_get_package_field()
     cat "$cache_file"
 }
 
+debianoid_get_package_url()
+{
+    origin="$1"
+    package_name="$2"
+
+    base_url="$(cat "$xlocales_cache/$origin/Packages.base_url")"
+    filename="$(debianoid_get_package_field "$origin" "locales" "Filename")"
+
+    echo "$base_url/$filename"
+}
+
 # == end shared debian/ubuntu routines ==
 
 debian_fetch_packages_file()
@@ -88,7 +99,8 @@ debian_fetch_packages_file()
 	else
 	    # it's in main repo
             repo_base_url="http://ftp.debian.org/debian"
-	fi	
+	fi
+	echo "$repo_base_url" > "$xlocales_cache/$origin/Packages.base_url"
 	debianoid_cat_packages_file "$repo_base_url" "$codename" > "$packages_file.tmp"
 	mv "$packages_file.tmp" "$packages_file"
     fi
@@ -115,3 +127,37 @@ xlocales_debian_list()
 	fi
     done
 }
+
+xlocales_debian_fetch()
+{
+    origin="$1"
+
+    version="$(origin_get_version "$origin")"
+    src="$xlocales_src/$origin"    
+
+    if [ -e "$src/xlocales.configured" ] ; then return ; fi
+
+    package_url="$(debianoid_get_package_url "$origin" "locales")"
+    file="$xlocales_cache/$origin/$(basename "$package_url")"
+    fetch_src "$package_url" "$file"
+    locale_version="$(basename "$package_url" | sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
+
+    mkdir -p "$src"
+    ar --output "$src" x "$file"
+    ( cd "$src" ; tar xvf data.tar.* )
+    cp "$src/usr/share/i18n/SUPPORTED" "$src/supported"
+
+    mkdir -p "$src/charmaps"
+    for charmap_gz in $(ls "$src/usr/share/i18n/charmaps") ; do
+        charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
+        charmap="$(basename "$charmap_gz" .gz)"
+        gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
+    done
+        
+    xlocales_gnu_configure "$origin" \
+			   "usr/share/i18n/locales" \
+			   "charmaps" \
+			   "$package_url" \
+			   "$locale_version"
+}
+

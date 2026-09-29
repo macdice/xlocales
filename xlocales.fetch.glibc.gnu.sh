@@ -29,7 +29,7 @@ xlocales_gnu_fetch()
     version="$(origin_get_version "$origin")"
     url="$xlocales_gnu_url/glibc-$version.tar.xz"
     tarball="$xlocales_cache/$origin/glibc-$version.tar.xz"
-	
+    
     mkdir -p "$src/build"
     fetch_src "$url" "$tarball"
     tar xf "$tarball" -C "$src"
@@ -45,7 +45,9 @@ xlocales_gnu_fetch()
 
     xlocales_gnu_configure "$origin" \
 			   "glibc-$version/localedata/locales" \
-			   "glibc-$version/localedata/charmaps"
+			   "glibc-$version/localedata/charmaps" \
+			   "$url" \
+			   "$version"
 }
 
 xlocales_gnu_munge_name()
@@ -68,6 +70,7 @@ xlocales_gnu_configure()
     locales_dir="$2"
     charmaps_dir="$3"
     url="$4"
+    locale_version="$5"
     
     src="$xlocales_src/$origin"
 
@@ -77,7 +80,7 @@ xlocales_gnu_configure()
     source="$(origin_get_source "$origin")"
     localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
-    # inject version into LC_IDENTIFICATION revision field for each
+    # Inject version into LC_IDENTIFICATION revision field for each
     # locale definition; this provides a robust way to confirm that
     # opening "en_US@glibc2.31" actually opened 2.31, and didn't
     # silently drop the modifier because it wasn't found, but this
@@ -169,7 +172,7 @@ xlocales_gnu_configure()
 	# preventing installation if they were to share a directory.
 	dst_dir="xlocales/$xlocales_prefix/$xlocales_infix/locales@glibc.$source"
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale@glibc$version\n"
+	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
 	# Symlinks with no modifiers at all are collected under
 	# XLOCALES/locales.SOURCE.  These hide the system locales of
@@ -192,7 +195,7 @@ xlocales_gnu_configure()
 	# versions and be uninstallable.)
 	dst_dir="xlocales-system-glibc/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@glibc$version\n"
+	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
     done < "$src/supported" >> "$src/Makefile"
 
