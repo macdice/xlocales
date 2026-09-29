@@ -60,12 +60,9 @@ set -e
 xlocales_build="build"
 xlocales_cache="cache"
 xlocales_src="src"
-xlocales_prefix="/usr/local"
 xlocales_version="1"
-
-xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
-
-xlocales_sources_help=""
+xlocales_jobs="1"
+xlocales_silent=""
 
 if [ -e "/etc/os-release" ] ; then
     . /etc/os-release
@@ -73,9 +70,11 @@ if [ -e "/etc/os-release" ] ; then
     xlocales_host_os_version="$VERSION_ID"
     xlocales_host_origin="$xlocales_host_os$xlocales_host_os_version"
 else
-    echo "Could not identify host OS." >&2
+    echo "Could not identify host OS without /etc/os-release." >&2
     exit 1
 fi
+
+xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
 
 case "$ID" in
     freebsd) xlocales_host_libc_version="$host_version"
@@ -83,7 +82,10 @@ case "$ID" in
 	     xlocales_default_source="freebsd"
 	     xlocales_sources="freebsd"
 	     . "$xlocales_script_basename.fetch.freebsd.sh"
-	     . "$xlocales_script_basename.configure.freebsd.sh"
+             xlocales_jobs="$(sysctl -n hw.cpu)"	     
+             xlocales_prefix="/usr/local"
+	     xlocales_infix="share"
+	     xlocales_system_locales="/usr/share/locales"
 	     ;;
     
     *)       xlocales_host_libc_version="$(getconf GNU_LIBC_VERSION | \
@@ -93,17 +95,20 @@ case "$ID" in
 		 exit 1
 	     fi	     
 	     xlocales_version_mod_prefix="glibc"
-	     xlocales_default_source="glibc"
+	     xlocales_default_source="gnu"
 	     for module in $(ls $xlocales_script_basename.fetch.glibc.*.sh) ; do
 		 module_os="$(echo "$module" | sed 's/.*\.fetch\.glibc\.\(.*\)\.sh/\1/')"
 		 . "$xlocales_script_basename.fetch.glibc.${module_os}.sh"
                  xlocales_sources="$xlocales_sources $module_os"
-		 if [ "$module" = "$xlocales_host_fetch_module" ] ; then
+		 if [ "$module_os" = "$xlocales_host_os" ] ; then
 		     # if it matches the host OS, make it the default source
 		     xlocales_default_source="$module_os"
 		 fi
 	     done	     
-	     . "$xlocales_script_basename.configure.glibc.sh"
+             xlocales_jobs="$(nproc)"
+             xlocales_prefix="/usr"
+	     xlocales_infix="lib"
+	     xlocales_system_locales="/usr/lib/locales"
 	     ;;
 esac
 
@@ -124,6 +129,13 @@ check_source()
     exit 1    
 }
 
+# "xlocales_version_le x y" tests if x <= y, using sort's -V
+# semantics.
+xlocales_version_le()
+{
+    printf "%s\n%s\n" $1 $2 | sort -CV
+}
+
 origin_get_source()
 {
     echo "$1" | sed 's/[0-9].*$//'
@@ -140,11 +152,13 @@ show_help()
 Usage: $0 [options...] command
 
  Options:
-   --help                    display this help
-   --build path              where to compile locales (default: build)
-   --src path                where to put sources (default: src)
-   --cache path              where to cache temporary files (default: cache)
-   --prefix path             package prefix (default: /usr/local)
+   -h|--help                 display this help
+   -b|--build path           where to compile locales (default: build)
+   -s|--src path             where to put sources (default: src)
+   -c|--cache path           where to cache temporary files (default: cache)
+   -p|--prefix path          package prefix (default: /usr/local)
+   -s|--silent               build quietly
+   -j|--ncpus N              how many CPUs to use (default: CPU count)
 
  Commands:
    list [source]             lists all versions of 'source' (default: $xlocales_default_source)
@@ -172,6 +186,7 @@ fetch_src()
 
     if [ ! -e "$dst" ] ; then
 	mkdir -p "$(dirname "$dst")"
+	echo "Fetching file: $url"
 	curl -f -s -S "$url" > "$dst.tmp"
 	mv "$dst.tmp" "$dst"
     fi
@@ -180,6 +195,7 @@ fetch_src()
 fetch_source()
 {
     source="$1"
+
     echo "Fetching all origins for source: $source"
     for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
 	fetch_origin "$origin"
@@ -190,8 +206,28 @@ fetch_origin()
 {
     origin="$1"
     source="$(origin_get_source "$origin")"
-    echo "Fetching origin: $origin"
+
+    #echo "Fetching origin: $origin"
     xlocales_${source}_fetch "$origin"
+}
+
+build_source()
+{
+    source="$1"
+
+    echo "Building all origins for source: $source"
+    for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
+	build_origin "$origin"
+    done
+}
+
+build_origin()
+{
+    origin="$1"
+    source="$(origin_get_source "$origin")"
+
+    echo "Building origin: $origin"
+    make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
 }
 
 while : ; do
@@ -200,6 +236,8 @@ while : ; do
         -c|--cache)  xlocales_cache="$2";  shift; shift;;
         -s|--src)    xlocales_src="$2";    shift; shift;;
         -p|--prefix) xlocales_prefix="$2"; shift; shift;;
+	-j|--jobs)   xlocales_jobs="$2";   shift; shift;;
+	-s|--silent) xlocales_silent="-s"; shift;;
 	list)
 	    shift
 	    if [ -n "$1" ] ; then
@@ -219,6 +257,20 @@ while : ; do
 		    case "$source_or_origin" in
 			*[0-9]*) fetch_origin "$source_or_origin";;
 			*)       fetch_source "$source_or_origin";;
+		    esac
+		done
+	    fi
+	    break
+	    ;;
+	build)
+	    shift
+	    if [ -z "$1" ] ; then
+		build_source "$xlocales_default_source"
+	    else
+		for source_or_origin in $@ ; do
+		    case "$source_or_origin" in
+			*[0-9]*) build_origin "$source_or_origin";;
+			*)       build_source "$source_or_origin";;
 		    esac
 		done
 	    fi

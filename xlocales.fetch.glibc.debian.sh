@@ -1,6 +1,6 @@
 xlocales_debian_desc()
 {
-    echo "Debian locales packages"
+    echo "Debian glibc locales packages"
 }
 
 # == begin shared debian/ubuntu routines ==
