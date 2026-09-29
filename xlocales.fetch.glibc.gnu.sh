@@ -97,25 +97,66 @@ xlocales_gnu_configure()
 	    > "$src/localedata/$locale_src"
     done
 
-    # write out meta-data files that will be used for packaging
-    echo "xlocales-$origin" > "$src/xlocales.package_name"
-    echo "$version.$xlocales_version" > "$src/xlocales.package_version"
-    echo "$url" > "$src/xlocales.package_source_url"
-    echo "$version" > "$src/xlocales.package_source_libc"
-    echo "$localedef_version" > "$src/xlocales.package_target_libc"
+    mkdir -p "xlocales-$origin"
+    mkdir -p "xlocales-system-$origin"
+    mkdir -p "xlocales-system-glibc-$origin"
 
-    echo "xlocales-system-$origin" > "$src/xlocales-system.package_name"
-    echo "$version.$xlocales_version" > "$src/xlocales-system.package_version"
-    echo "$url" > "$src/xlocales-system.package_source"
-    echo "$version" > "$src/xlocales-system.package_source_libc"
-    echo "$localedef_version" > "$src/xlocales-system.package_target_libc"
-
-    echo "xlocales-system-glibc-$origin" > "$src/xlocales-system-glibc.package_name"
-    echo "$version.$xlocales_version" > "$src/xlocales-system-glibc.package_version"
-    echo "$url" > "$src/xlocales-system-glibc.package_source"
-    echo "$version" > "$src/xlocales-system-glinc.package_source_libc"
-    echo "$localedef_version" > "$src/xlocales-system-glibc.package_target_libc"
-
+    echo > "$src/Makefile"
+    
+    case "$xlocales_package" in
+	deb)
+	    package_arch="$(dpkg --print-architecture)"
+	    package_version="$locale_version"
+	    echo "PACKAGES+=../../xlocales-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
+	    mkdir -p "$src/xlocales-$origin/DEBIAN"
+	    cat <<EOF > "$src/xlocales-$origin/DEBIAN/control"
+Package: xlocales-$origin
+Version: $package_version
+Architecture: $package_arch
+Maintainer: $xlocales_maintainer
+Homepage: $xlocales_homepage
+Description: Locales from $origin compiled for $xlocales_host_origin
+ Locale data obtained from:
+  $url
+ and then cross-compiled with localedef $localedef_version for $xlocales_host_origin.
+ Can be made available to libc with various names by setting LOCPATH to:
+  * $xlocales_prefix/$xlocales_infix/locales@$source (e.g. en_US.utf8@$origin)
+  * $xlocales_prefix/$xlocales_infix/locales@glibc.$source (e.g. en_US.utf8@glibc$locale_version)
+  * $xlocales_prefix/$xlocales_infix/locales.$origin (e.g. en_US.utf8, hiding system locale)
+ The only intentional change is to append additional version information to
+ the LC_IDENTIFICATION revision string.  Other variations in behaviour
+ compared to the system locales on $origin systems are possible due to C code
+ changes and bug fixes in libc or localedef.
+EOF
+	    echo "PACKAGES+=../../xlocales-system-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
+	    mkdir -p "$src/xlocales-system-$origin/DEBIAN"
+	    cat <<EOF > "$src/xlocales-system-$origin/DEBIAN/control"
+Package: xlocales-system-$origin
+Version: $locale_version
+Architecture: $package_arch
+Depends: xlocales-$origin (= $package_version)
+Maintainer: $xlocales_maintainer
+Homepage: $xlocales_homepage
+Description: @$origin locales in system locale path
+ Adds locale names with @$origin modifiers to the standard locale path
+ so that they are available wihout setting LOCPATH.
+EOF
+	    echo "PACKAGES+=../../xlocales-system-glibc-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
+	    mkdir -p "$src/xlocales-system-glibc-$origin/DEBIAN"
+	    cat <<EOF > "$src/xlocales-system-glibc-$origin/DEBIAN/control"
+Package: xlocales-system-glibc-$origin
+Version: $locale_version
+Architecture: $package_arch
+Depends: xlocales-$origin (= $package_version)
+Maintainer: $xlocales_maintainer
+Homepage: $xlocales_homepage
+Description: @glibc$locale_version locales in system locale path
+ Adds locale names with @glibc$locale_version modifiers to the standard locale path
+ so that they are available wihout setting LOCPATH.
+EOF
+	    ;;
+    esac
+    
     # convert the SUPPORTED file, which lists the names and charmaps
     # to compile, into an easy to parse format; this happens to be the
     # same format that Debian/Ubuntu ship, so check if it's already
@@ -128,15 +169,23 @@ xlocales_gnu_configure()
     # generate "all" target
     while read -r locale charmap ; do
 	locale="$(xlocales_gnu_munge_name "$locale")"
-	locale_dst="xlocales/$xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin"
+	locale_dst="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin"
 	echo "LOCALES+=$locale_dst"
-    done < "$src/supported"	> "$src/Makefile"    
-    echo 'all: $(LOCALES)' >> "$src/Makefile"
+    done < "$src/supported"	>> "$src/Makefile"    
+    echo 'all: $(LOCALES) $(PACKAGES)' >> "$src/Makefile"
+
+    # generate the package target rule
+    case "$xlocales_package" in
+	deb)
+	    echo '%.deb: $(LOCALES)' >> "$src/Makefile"
+	    printf '\tdpkg-deb --root-owner-group -b $(patsubst %%_*,%%,$(notdir $@)) $(dir $@)\n' >> "$src/Makefile"
+	    ;;
+    esac   
 
     # generate target for each locale
     while read -r locale charmap ; do
 	locale="$(xlocales_gnu_munge_name "$locale")"
-	locale_dst_dir="xlocales/$xlocales_prefix/$xlocales_infix/locales@$source"
+	locale_dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@$source"
 	locale_dst="$locale_dst_dir/$locale@$origin"
 	locale_src="localedata/$(echo "$locale" | cut -d. -f1)"
 
@@ -170,21 +219,21 @@ xlocales_gnu_configure()
 	# requires a separate directory for each source as the glibc
 	# versions might coincide between Linux distributions,
 	# preventing installation if they were to share a directory.
-	dst_dir="xlocales/$xlocales_prefix/$xlocales_infix/locales@glibc.$source"
+	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@glibc.$source"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
 	# Symlinks with no modifiers at all are collected under
 	# XLOCALES/locales.SOURCE.  These hide the system locales of
 	# the same names, if that directory is set as LOCPATH.
-	dst_dir="xlocales/$xlocales_prefix/$xlocales_infix/locales.$origin"
+	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales.$origin"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale\n"
 
 	# Optional symlinks to make eg en_US.utf8@debian12 available
 	# without modifying LOCPATH, installable with the
 	# xlocales-system-ORIGIN package.
-	dst_dir="xlocales-system/$xlocales_system_locales"
+	dst_dir="xlocales-system-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@$origin\n"
 
@@ -193,7 +242,7 @@ xlocales_gnu_configure()
 	# xlocales-system-glibc-ORIGIN packages from the same SOURCE.
 	# (Different sources are likely to create clashes in glibc
 	# versions and be uninstallable.)
-	dst_dir="xlocales-system-glibc/$xlocales_system_locales"
+	dst_dir="xlocales-system-glibc-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 

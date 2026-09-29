@@ -63,6 +63,9 @@ xlocales_src="src"
 xlocales_version="1"
 xlocales_jobs="1"
 xlocales_silent=""
+xlocales_package=""
+xlocales_homepage="https://github.com/macdice/xlocales"
+xlocales_maintainer="Maintainer <name@example.com>"
 
 if [ -e "/etc/os-release" ] ; then
     . /etc/os-release
@@ -152,24 +155,28 @@ show_help()
 Usage: $0 [options...] command
 
  Options:
-   -h|--help                 display this help
-   -b|--build path           where to compile locales (default: build)
-   -s|--src path             where to put sources (default: src)
-   -c|--cache path           where to cache temporary files (default: cache)
-   -p|--prefix path          package prefix (default: /usr/local)
-   -s|--silent               build quietly
-   -j|--ncpus N              how many CPUs to use (default: CPU count)
+   -s|--src path              where to put sources (default: $xlocales_src)
+   -b|--build path            where to put packages (default: $xlocales_build)
+   -c|--cache path            where to cache temporary files (default: $xlocales_cache)
+   -p|--prefix path           installation prefix (default: $xlocales_prefix)
+   -j|--ncpus N               how many CPUs to use (default: CPU count)
+
+   -H|--homepage "https..."   Maintainer URL included in packages
+   -M|--maintainer "..."      Maintainer "name <email>" included in packages
+   -T|--tar                   enable .tgz package creation (default)
+   -D|--deb                   enable .deb package creation
+   -R|--rpm                   enable .rpm package creation
+   -P|--pkg                   enable .pkg package creation (FreeBSD)
 
  Commands:
-   list [source]             lists all versions of 'source' (default: $xlocales_default_source)
-   fetch [source]            fetches all versions of 'source' (default: $xlocales_default_source)
-   fetch source/version ...  fetches specified locale data
-   configure                 generates Makefiles to compile all fetched locales
+   list [source]              lists (default: $xlocales_default_source)
+   fetch [source|origin]...   fetches, unpacks, creates makefiles
+   build [source|origin]...   builds and packages
 
  Host information:
-   OS:                       $xlocales_host_os
-   OS version:               $xlocales_host_os_version
-   libc version:             $xlocales_host_libc_version
+   OS:                        $xlocales_host_os
+   OS version:                $xlocales_host_os_version
+   libc version:              $xlocales_host_libc_version
 
  Available sources:
 EOF
@@ -230,6 +237,14 @@ build_origin()
     make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
 }
 
+deb_origin()
+{
+    origin="$1"
+
+    echo "Building origin: $origin"
+    make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
+}
+
 while : ; do
     case "$1" in
         -b|--build)  xlocales_build="$2";  shift; shift;;
@@ -238,6 +253,12 @@ while : ; do
         -p|--prefix) xlocales_prefix="$2"; shift; shift;;
 	-j|--jobs)   xlocales_jobs="$2";   shift; shift;;
 	-s|--silent) xlocales_silent="-s"; shift;;
+	-H|--homepage) xlocales_homepage="$2"; shift; shift;;
+	-M|--maintainer) xlocales_maintainer="$2"; shift; shift;;
+	-T|--tar)    xlocales_package="tar"; shift;;
+	-R|--rpm)    xlocales_package="rpm"; shift;;
+	-D|--deb)    xlocales_package="deb"; shift;;
+	-P|--pkg)    xlocales_package="pkg"; shift;;
 	list)
 	    shift
 	    if [ -n "$1" ] ; then
@@ -248,34 +269,21 @@ while : ; do
 	    xlocales_${source}_list | cut -f1
 	    break
 	    ;;
-	fetch)
+	fetch|build)
+	    verb="$1"
 	    shift
 	    if [ -z "$1" ] ; then
-		fetch_source "$xlocales_default_source"
+		${verb}_source "$xlocales_default_source"
 	    else
 		for source_or_origin in $@ ; do
 		    case "$source_or_origin" in
-			*[0-9]*) fetch_origin "$source_or_origin";;
-			*)       fetch_source "$source_or_origin";;
+			*[0-9]*) ${verb}_origin "$source_or_origin";;
+			*)       ${verb}_source "$source_or_origin";;
 		    esac
 		done
 	    fi
 	    break
 	    ;;
-	build)
-	    shift
-	    if [ -z "$1" ] ; then
-		build_source "$xlocales_default_source"
-	    else
-		for source_or_origin in $@ ; do
-		    case "$source_or_origin" in
-			*[0-9]*) build_origin "$source_or_origin";;
-			*)       build_source "$source_or_origin";;
-		    esac
-		done
-	    fi
-	    break
-	    ;;	    
 	*) show_help
 	   exit 1
     esac
