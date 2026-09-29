@@ -111,7 +111,7 @@ case "$ID" in
              xlocales_jobs="$(nproc)"
              xlocales_prefix="/usr"
 	     xlocales_infix="lib"
-	     xlocales_system_locales="/usr/lib/locales"
+	     xlocales_system_locales="/usr/lib/locale"
 	     ;;
 esac
 

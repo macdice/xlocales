@@ -120,9 +120,9 @@ Description: Locales from $origin compiled for $xlocales_host_origin
   $url
  and then cross-compiled with localedef $localedef_version for $xlocales_host_origin.
  Can be made available to libc with various names by setting LOCPATH to:
-  * $xlocales_prefix/$xlocales_infix/locales@$source (e.g. en_US.utf8@$origin)
-  * $xlocales_prefix/$xlocales_infix/locales@glibc.$source (e.g. en_US.utf8@glibc$locale_version)
-  * $xlocales_prefix/$xlocales_infix/locales.$origin (e.g. en_US.utf8, hiding system locale)
+  * $xlocales_prefix/$xlocales_infix/locale@$source (e.g. en_US.utf8@$origin)
+  * $xlocales_prefix/$xlocales_infix/locale@glibc.$source (e.g. en_US.utf8@glibc$locale_version)
+  * $xlocales_prefix/$xlocales_infix/locale.$origin (e.g. en_US.utf8, hiding system locale)
  The only intentional change is to append additional version information to
  the LC_IDENTIFICATION revision string.  Other variations in behaviour
  compared to the system locales on $origin systems are possible due to C code
@@ -169,7 +169,7 @@ EOF
     # generate "all" target
     while read -r locale charmap ; do
 	locale="$(xlocales_gnu_munge_name "$locale")"
-	locale_dst="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin"
+	locale_dst="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin"
 	echo "LOCALES+=$locale_dst"
     done < "$src/supported"	>> "$src/Makefile"    
     echo 'all: $(LOCALES) $(PACKAGES)' >> "$src/Makefile"
@@ -178,14 +178,14 @@ EOF
     case "$xlocales_package" in
 	deb)
 	    echo '%.deb: $(LOCALES)' >> "$src/Makefile"
-	    printf '\tdpkg-deb --root-owner-group -b $(patsubst %%_*,%%,$(notdir $@)) $(dir $@)\n' >> "$src/Makefile"
+	    printf "\tdpkg-deb --root-owner-group -b \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$(notdir \$@)) \$(dir \$@)\n" >> "$src/Makefile"
 	    ;;
     esac   
 
     # generate target for each locale
     while read -r locale charmap ; do
 	locale="$(xlocales_gnu_munge_name "$locale")"
-	locale_dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@$source"
+	locale_dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@$source"
 	locale_dst="$locale_dst_dir/$locale@$origin"
 	locale_src="localedata/$(echo "$locale" | cut -d. -f1)"
 
@@ -205,9 +205,10 @@ EOF
 	printf "\tI18NPATH=./locales localedef -f $charmaps_dir/$charmap -i \$< \$@\n"
 
 	# Symlinks with @glibcX.Y modifiers are also collected under
-	# locales@glibc.SOURCE.  For example, with two
-	# xlocales-debianN packages installed, under
-	# XLOCALES/locales@glibc.debian you might see:
+	# locale@glibc, or locale@glibc.SOURCE if SOURCE doesn't
+	# matches the host OS.  For example, with two xlocales-debianN
+	# packages installed on Debian, under /usr/lib/locale@glibc
+	# you might see:
 	#
 	# en_US.utf8@glibc2.31
 	# en_US.utf8@glibc2.34
@@ -219,23 +220,27 @@ EOF
 	# requires a separate directory for each source as the glibc
 	# versions might coincide between Linux distributions,
 	# preventing installation if they were to share a directory.
-	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales@glibc.$source"
+	if [ "$source" = "$xlocales_host_os" ] ; then
+	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@glibc"
+	else
+	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@glibc.$source"
+	fi
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
+	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
 	# Symlinks with no modifiers at all are collected under
-	# XLOCALES/locales.SOURCE.  These hide the system locales of
-	# the same names, if that directory is set as LOCPATH.
-	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locales.$origin"
+	# locale.SOURCE.  These hide the system locales of the same
+	# names, if that directory is set as LOCPATH.
+	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale.$origin"
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s ../locales@$source/$locale@$origin $dst_dir/$locale\n"
+	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale\n"
 
 	# Optional symlinks to make eg en_US.utf8@debian12 available
 	# without modifying LOCPATH, installable with the
 	# xlocales-system-ORIGIN package.
 	dst_dir="xlocales-system-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@$origin\n"
+	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@$origin\n"
 
 	# Optional symlinks to make eg en_US.utf8@glibcX.Y available
 	# without modifying LOCPATH, installable with one or more
@@ -244,7 +249,7 @@ EOF
 	# versions and be uninstallable.)
 	dst_dir="xlocales-system-glibc-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locales@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
+	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
     done < "$src/supported" >> "$src/Makefile"
 
