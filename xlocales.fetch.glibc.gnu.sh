@@ -109,6 +109,11 @@ xlocales_gnu_configure()
 	    package_version="$locale_version"
 	    echo "PACKAGES+=../../xlocales-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
 	    mkdir -p "$src/xlocales-$origin/DEBIAN"
+	    if [ "$source" = "$xlocales_host_os" ] ; then
+		opt_source=""
+	    else
+		opt_source=".$source"
+	    fi
 	    cat <<EOF > "$src/xlocales-$origin/DEBIAN/control"
 Package: xlocales-$origin
 Version: $package_version
@@ -121,7 +126,7 @@ Description: Locales from $origin compiled for $xlocales_host_origin
  and then cross-compiled with localedef $localedef_version for $xlocales_host_origin.
  Can be made available to libc with various names by setting LOCPATH to:
   * $xlocales_prefix/$xlocales_infix/locale@$source (e.g. en_US.utf8@$origin)
-  * $xlocales_prefix/$xlocales_infix/locale@glibc.$source (e.g. en_US.utf8@glibc$locale_version)
+  * $xlocales_prefix/$xlocales_infix/locale@glibc$opt_source (e.g. en_US.utf8@glibc$locale_version)
   * $xlocales_prefix/$xlocales_infix/locale.$origin (e.g. en_US.utf8, hiding system locale)
  The only intentional change is to append additional version information to
  the LC_IDENTIFICATION revision string.  Other variations in behaviour
