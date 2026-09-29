@@ -13,7 +13,8 @@ debianoid_distro_info_data_for_source()
     file="$xlocales_cache/$source/$source.csv"
 
     fetch_src "$url" "$file"
-    cat "$file"
+    # filter out title line and lines with no release date...
+    grep -E '^[0-9][^,]*,[^,]*,[^,]*,[^,]*,[0-9]' "$file"
 }
 
 debianoid_codename_for_origin()
@@ -118,8 +119,8 @@ debian_locales_package_file()
 xlocales_debian_list()
 {
 
-    for v in $(debianoid_distro_info_data_for_source "debian" | tail +2 | cut -d, -f1 | grep -v '\.' | sort -Vr) ; do
-	if [ "$v" -ge "10" -a "$v" -lt "15" ] ; then
+    for v in $(debianoid_distro_info_data_for_source "debian" | cut -d, -f1 | grep -v '\.' | sort -Vr) ; do
+	if [ "$v" -ge "10" ] ; then
 	    origin="debian$v"
 	    debian_fetch_packages_file "$origin"
 	    version="$(debianoid_get_package_field "$origin" "locales" "Version")"
