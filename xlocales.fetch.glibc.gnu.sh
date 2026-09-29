@@ -10,9 +10,14 @@ xlocales_gnu_list()
 {
     index_file="$xlocales_cache/gnu/index.html"
     
+    localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
+
     fetch_src "$xlocales_gnu_url/" "$index_file"
     for v in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
-	if ! xlocales_version_le "$xlocales_gnu_min" "$v" ; then continue ; fi
+	# skip ancient localedata
+	if ! xlocales_version_le "$xlocales_gnu_min" "$v" ; then continue ; fi	
+	# skip localedata newer than localedef
+	if ! xlocales_version_le "$v" "$localedef_version" ; then continue ; fi
 	echo "gnu$v" "$v"
     done
 }
@@ -127,11 +132,6 @@ xlocales_gnu_configure()
 	echo "LOCALES+=$locale_dst"
     done < "$src/supported"	> "$src/Makefile"    
     echo 'all: $(LOCALES)' >> "$src/Makefile"
-    #echo "" >> "$src/Makefile"
-
-    # generate "clean" target
-    echo "clean:" >> "$src/Makefile"    
-    printf "\trm -fr xlocales.configured glibc-$version locales charmaps build supported xlocales\n" >> "$src/Makefile"
 
     # generate target for each locale
     while read -r locale charmap ; do
