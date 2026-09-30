@@ -2,13 +2,12 @@ xlocales_gnu_url="https://ftp.gnu.org/gnu/glibc"
 
 xlocales_gnu_desc()
 {
-    echo "GNU glibc tarballs"
+    echo "Upstream glibc tarballs from gnu.org"
 }
 
 xlocales_gnu_list()
 {
     index_file="$xlocales_cache/gnu/index.html"
-    
 
     fetch_src "$xlocales_gnu_url/" "$index_file"
     for locale_version in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
@@ -87,22 +86,31 @@ xlocales_gnu_configure()
     source="$(origin_get_source "$origin")"
     localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
+    mkdir -p "$src/localedata"
+
     # Inject version into LC_IDENTIFICATION revision field for each
     # locale definition; this provides a robust way to confirm that
     # opening "en_US@glibc2.31" actually opened 2.31, and didn't
     # silently drop the modifier because it wasn't found, but this
     # convention is made up.
-    mkdir -p "$src/localedata"
+    #
+    # There is already potentially useful information in there in
+    # the source: the Unicode version version used to generate ctype.
+    # Unfortunately it does not survive into compiled locales, so
+    # let's invent a format for bolting arbitrary extra version on
+    # after the stagnant "1.0" that most locales report.
+    unicode_version="$(sed -n 's/^revision *\"\(.*\)\"$/\1/p' < "$src/$locales_dir/i18n_ctype" | head -1)"    
     for locale_src in $(ls "$src/$locales_dir") ; do
-	sed "s/^\(revision *\".*\)\"$/\1; xlocales=$xlocales_version; origin=$origin; localedef=$localedef_version; localedata=$version\"/" \
+	sed "s/^\(revision *\".*\)\"$/\1; xlocales=$xlocales_version; origin=$origin; unicode=$unicode_version; localedef=$localedef_version; localedata=$version\"/" \
 	    < "$src/$locales_dir/$locale_src" \
 	    > "$src/localedata/$locale_src"
     done
 
     mkdir -p "xlocales-$origin"
     mkdir -p "xlocales-system-$origin"
-    mkdir -p "xlocales-system-glibc-$origin"
+    mkdir -p "xlocales-system-extra-$origin"
 
+    printf "Generating $src/Makefile..." >&2    
     echo > "$src/Makefile"
     
     case "$xlocales_package" in
@@ -148,18 +156,19 @@ Description: @$origin locales in system locale path
  Adds locale names with @$origin modifiers to the standard locale path
  so that they are available wihout setting LOCPATH.
 EOF
-	    echo "PACKAGES+=../../xlocales-system-glibc-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
-	    mkdir -p "$src/xlocales-system-glibc-$origin/DEBIAN"
-	    cat <<EOF > "$src/xlocales-system-glibc-$origin/DEBIAN/control"
-Package: xlocales-system-glibc-$origin
+	    echo "PACKAGES+=../../xlocales-system-extra-${origin}_${package_version}_${package_arch}.deb" >> "$src/Makefile"
+	    mkdir -p "$src/xlocales-system-extra-$origin/DEBIAN"
+	    cat <<EOF > "$src/xlocales-system-extra-$origin/DEBIAN/control"
+Package: xlocales-system-extra-$origin
 Version: $package_version
 Architecture: $package_arch
 Depends: xlocales-$origin (= $package_version)
 Maintainer: $xlocales_maintainer
 Homepage: $xlocales_homepage
-Description: @glibc$locale_version locales in system locale path
- Adds locale names with @glibc$locale_version modifiers to the standard locale path
- so that they are available wihout setting LOCPATH.
+Description: @glibc$locale_version and @unicode$unicode_version in system locale path
+ Adds locale names with @glibc$locale_version and @unicode$unicode_version
+ modifiers to the standard locale path so that they are available without
+ setting LOCPATH.
 EOF
 	    ;;
     esac
@@ -198,16 +207,10 @@ EOF
 
 	echo "$locale_dst: $locale_src"
 	
-	# Cross-compiled locales with @ORIGIN modifiers are collected
-	# under locales@SOURCE, so if you install xlocales-debian12
+	# Cross-compiled locales with @origin modifiers are collected
+	# under locales@source, so if you install xlocales-debian12
 	# and xlocales-debian13 then /usr/lib/locales@debian will
-	# contain:
-	#
-	# en_US.utf8@debian12
-	# en_US.utf8@debian13
-	# fr_FR.utf8@debian12
-	# fr_FR.utf8@debian13
-	# ...
+	# contain both en_US.utf8@debian12 and en_US.utf8@debian13.
 	printf "\t@mkdir -p $locale_dst_dir\n"
 	printf "\tI18NPATH=./locales localedef -f $charmaps_dir/$charmap -i \$< \$@\n"
 
@@ -215,18 +218,8 @@ EOF
 	# locale@glibc, or locale@glibc.SOURCE if SOURCE doesn't
 	# matches the host OS.  For example, with two xlocales-debianN
 	# packages installed on Debian, under /usr/lib/locale@glibc
-	# you might see:
-	#
-	# en_US.utf8@glibc2.31
-	# en_US.utf8@glibc2.34
-	# fr_FR.utf8@glibc2.31
-	# fr_FR.utf8@glibc2.34
-	# ...
-	#
-	# This allows glibc version-based locale selection, but
-	# requires a separate directory for each source as the glibc
-	# versions might coincide between Linux distributions,
-	# preventing installation if they were to share a directory.
+	# you might see something lik en_US.utf8@glibc2.31 and
+	# en_US.utf8@glibc2.34.
 	if [ "$source" = "$xlocales_host_os" ] ; then
 	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@glibc"
 	else
@@ -235,30 +228,44 @@ EOF
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
-	# Symlinks with no modifiers at all are collected under
-	# locale.SOURCE.  These hide the system locales of the same
+	# Likewise for @unicodeX.Y.Z, collated under locale@unicode or
+	# locale@unicode.SOURCE for non-host sources.
+	#
+	# XXX In theory two major releases of an OS could use two
+	# releases of glibc that use the same Unicode version.  You
+	# won't be able to install them both, so it might become
+	# necessary to disable this or put it in a separate package so
+	# you can skip installing one of them?
+	if [ "$source" = "$xlocales_host_os" ] ; then
+	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode"
+	else
+	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode.$source"
+	fi
+	printf "\t@mkdir -p $dst_dir\n"
+	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"	
+
+	# Symlinks with no modifiers are collected under
+	# locale.ORIGIN.  They hide the system locales of the same
 	# names, if that directory is set as LOCPATH.
 	dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale.$origin"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale\n"
 
 	# Optional symlinks to make eg en_US.utf8@debian12 available
-	# without modifying LOCPATH, installable with the
-	# xlocales-system-ORIGIN package.
+	# without setting LOCPATH.  Packaged as xlocales-system-ORIGIN.
 	dst_dir="xlocales-system-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@$origin\n"
 
-	# Optional symlinks to make eg en_US.utf8@glibcX.Y available
-	# without modifying LOCPATH, installable with one or more
-	# xlocales-system-glibc-ORIGIN packages from the same SOURCE.
-	# (Different sources are likely to create clashes in glibc
-	# versions and be uninstallable.)
-	dst_dir="xlocales-system-glibc-$origin/$xlocales_system_locales"
+	# Optional extra symlinks to make eg en_US.utf8@glibc2.31 and
+	# en_US.utf*@unicode13.0.0 available without setting LOCPATH.
+	dst_dir="xlocales-system-extra-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
+	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"
 
     done < "$src/supported" >> "$src/Makefile"
+    printf "\r\033[K" >&2
 
     touch "$src/xlocales.configured"
 }

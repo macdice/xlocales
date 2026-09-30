@@ -2,7 +2,7 @@ xlocales_ubuntu_min="18.04"
 
 xlocales_ubuntu_desc()
 {
-    echo "Ubuntu glibc locales packages"
+    echo "Ubuntu 'locales' packages"
 }
 
 xlocales_ubuntu_fetch_packages_file()

@@ -6,10 +6,11 @@
 
 set -e
 
+xlocales_version="1"
+
 xlocales_build="build"
 xlocales_cache="cache"
 xlocales_src="src"
-xlocales_version="1"
 xlocales_jobs="1"
 xlocales_silent=""
 xlocales_homepage="https://github.com/macdice/xlocales"
@@ -133,9 +134,10 @@ fetch_src()
 
     if [ ! -e "$dst" ] ; then
 	mkdir -p "$(dirname "$dst")"
-	echo "Fetching file: $url" >&2
+	printf "Fetching $url..." >&2
 	curl -f -s -S "$url" > "$dst.tmp"
 	mv "$dst.tmp" "$dst"
+	printf "\r\033[K" >&2
     fi
 }
 
@@ -182,6 +184,7 @@ build_origin()
     origin="$1"
     source="$(origin_get_source "$origin")"
 
+    fetch_origin "$origin"
     echo "Building origin: $origin"
     make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
 }
@@ -192,6 +195,20 @@ deb_origin()
 
     echo "Building origin: $origin"
     make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
+}
+
+diff_source()
+{
+    exit 1
+}
+
+diff_origin()
+{
+    origin="$1"
+    source="$(origin_get_source "$origin")"
+
+    echo "Diffing $origin against upstream GNU sources"
+    xlocales_${source}_diff "$origin"
 }
 
 while : ; do
@@ -224,7 +241,7 @@ while : ; do
 	    xlocales_${source}_list | cut -f1
 	    break
 	    ;;
-	fetch|build)
+	fetch|build|diff)
 	    verb="$1"
 	    shift
 	    if [ -z "$1" ] ; then

@@ -2,10 +2,8 @@ xlocales_debian_min="10"
 
 xlocales_debian_desc()
 {
-    echo "Debian glibc locales packages"
+    echo "Debian 'locales' packages"
 }
-
-# == begin shared debian/ubuntu routines ==
 
 debian_distro_info_data_for_source()
 {
@@ -41,10 +39,10 @@ debian_cat_packages_file()
     repo_base_url="$1"
     codename="$2"
 
-    fetch_src "https://old-releases.ubuntu.com/ubuntu/dists/" \
-	      "$xlocales_cache/ubuntu/old-releases.html"
+    cache_file="$xlocales_cache/debian/$codename.main"
+    fetch_src "$repo_base_url/dists/$codename/main" "$cache_file"
     
-    if curl -f -s -S "$repo_base_url/dists/$codename/main" | grep "binary-all" > /dev/null ; then
+    if grep -q "binary-all" "$cache_file" ; then
 	# modern Debian has locales in "binary-all"
         arch="all"
     else
@@ -54,7 +52,9 @@ debian_cat_packages_file()
     fi
 
     url="$repo_base_url/dists/$codename/main/binary-$arch/Packages.gz"
+    printf "Fetching $url..." >&2    
     curl -f -s -S "$url" | gzip -d
+    printf "\r\033[K" >&2
 }
 
 debian_get_package_field()
@@ -87,8 +87,6 @@ debian_get_package_url()
 
     echo "$base_url/$filename"
 }
-
-# == end shared debian/ubuntu routines ==
 
 debian_fetch_packages_file()
 {
@@ -167,3 +165,36 @@ xlocales_debian_fetch()
 			   "$package_version"
 }
 
+xlocales_debian_diff()
+{
+    xorigin="$1"
+
+    package_version="$(debian_get_package_field "$origin" "locales" "Version")"
+    locale_version="$(echo "$package_version" | sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
+    upstream="gnu$locale_version"
+    #src="$xlocales_src/$origin"
+    #gnu="$xlocales_src/$upstream"
+    
+    xlocales_debian_fetch "$xorigin"
+    xlocales_gnu_fetch "$upstream"
+
+    src="$xlocales_src/$xorigin"
+    gnu="$xlocales_src/$upstream"
+
+    ls "$src/charmaps" | sort > "$src/charmaps.mine"
+    ls "$gnu/glibc-$locale_version/localedata/charmaps" | sort > "$src/charmaps.upstream"
+    diff -u "$src/charmaps.upstream" "$src/charmaps.mine" || true
+    for x in $(ls "$src/charmaps") ; do
+	diff -u "$gnu/glibc-$locale_version/localedata/charmaps/$x" "$src/charmaps/$x" || true
+    done
+
+    ls "$src/usr/share/i18n/locales" | sort > "$src/locales.mine"
+    ls "$gnu/glibc-$locale_version/localedata/locales" | sort > "$src/locales.upstream"
+    diff -u "$src/locales.upstream" "$src/locales.mine" || true
+    for x in $(ls "$src/usr/share/i18n/locales") ; do
+	if [ -e "$gnu/glibc-$locale_version/localedata/locales/$x" ] ; then
+	    diff -u "$gnu/glibc-$locale_version/localedata/locales/$x" \
+		 "$src/usr/share/i18n/locales/$x" || true
+	fi
+    done
+}
