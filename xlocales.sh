@@ -39,7 +39,7 @@ case "$ID" in
 	     xlocales_infix="share"
 	     xlocales_system_locales="/usr/share/locale"
 	     xlocales_package="pkg"
-	     . "$xlocales_script_basename.fetch.freebsd.sh"
+	     . "$xlocales_script_basename.freebsd.sh"
 	     ;;
     
     *)       xlocales_max_libc_version="$(getconf GNU_LIBC_VERSION | \
@@ -63,9 +63,9 @@ case "$ID" in
 		 xlocales_package="tar";
 	     fi
 
-	     for module in $(ls $xlocales_script_basename.fetch.glibc.*.sh) ; do
-		 module_os="$(echo "$module" | sed 's/.*\.fetch\.glibc\.\(.*\)\.sh/\1/')"
-		 . "$xlocales_script_basename.fetch.glibc.${module_os}.sh"
+	     for module in $(ls $xlocales_script_basename.glibc.*.sh) ; do
+		 module_os="$(echo "$module" | sed 's/.*\.glibc\.\(.*\)\.sh/\1/')"
+		 . "$xlocales_script_basename.glibc.${module_os}.sh"
                  xlocales_sources="$xlocales_sources $module_os"
 		 if [ "$module_os" = "$xlocales_host_os" ] ; then
 		     xlocales_default_source="$module_os"
