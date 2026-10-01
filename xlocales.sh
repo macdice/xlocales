@@ -14,7 +14,8 @@ xlocales_src="src"
 xlocales_jobs="1"
 xlocales_silent=""
 xlocales_homepage="https://github.com/macdice/xlocales"
-xlocales_maintainer="Maintainer <name@example.com>"
+xlocales_maintainer="Thomas Munro <thomas.munro@gmail.com>"
+xlocales_unicode="auto"
 
 if [ -e "/etc/os-release" ] ; then
     . /etc/os-release
@@ -55,6 +56,8 @@ case "$ID" in
              xlocales_prefix="/usr"
 	     xlocales_infix="lib"
 	     xlocales_system_locales="/usr/lib/locale"
+
+	     # guess what type of package to make
 	     if [ -e "/var/lib/dpkg" ] ; then
 		 xlocales_package="deb"
 	     elif [ -e "/var/lib/rpm" ] ; then
@@ -102,6 +105,7 @@ Usage: $0 [options...] command
    -c|--cache path            where to cache temporary files (default: $xlocales_cache)
    -p|--prefix path           installation prefix (default: $xlocales_prefix)
    -j|--jobs N                how many CPUs to use (default: $xlocales_jobs)
+   -u|--unicode               enable optional @unicodeX.Y modifiers (default: off)
       --clear-cache           wipe cached meta-data files when listing/fetching
 
    -H|--homepage "https..."   Maintainer URL included in packages
@@ -127,6 +131,12 @@ EOF
     done
 }
 
+clear_output()
+{
+    printf "\r\033[K" >&2
+}
+
+# Fetch from URL and store it at $2, unless it is already present.
 fetch_src()
 {
     url="$1"
@@ -137,10 +147,11 @@ fetch_src()
 	printf "Fetching $url..." >&2
 	curl -f -s -S "$url" > "$dst.tmp"
 	mv "$dst.tmp" "$dst"
-	printf "\r\033[K" >&2
+	clear_output
     fi
 }
 
+# Fetch all origins listed by $1.
 fetch_source()
 {
     source="$1"
@@ -156,6 +167,26 @@ fetch_source()
     done
 }
 
+# Fetch and unpack sources from an origin under $xlocales_src/$origin.
+#
+# Since glibc systems all have slightly different layout, the fetch
+# routines use symlinks to create a standardised layout like this:
+#
+#   charmaps/
+#   locales/
+#
+# All systems create the following:
+#
+#   source_url - eg URL of source package
+#   source_version - eg 2.31-7, 15.0.0-p1
+#   libc_version - eg 2.31, 15.0
+#   Makefile
+#
+# The Makefile's default target should build xlocales-ORIGIN,
+# xlocales-system-ORIGIN, xlocales-system-extra-ORIGIN packages.
+#
+# If $xlocale_locales_pkg is not "none", the default Makefile target
+# should also produce packages in
 fetch_origin()
 {
     origin="$1"
@@ -197,17 +228,17 @@ deb_origin()
     make -C "$xlocales_src/$origin" $xlocales_silent -j "$xlocales_jobs"
 }
 
-diff_source()
-{
-    exit 1
-}
-
 diff_origin()
 {
-    origin="$1"
+    origin1="$1"
+    origin2="$2"
     source="$(origin_get_source "$origin")"
 
-    echo "Diffing $origin against upstream GNU sources"
+    if [ -z "$origin2" ] ; then
+	echo "Diffing $origin1 against upstream GNU sources"
+    else
+	echo "Diffing $origin1 against $origin2"
+    fi
     xlocales_${source}_diff "$origin"
 }
 
@@ -225,6 +256,7 @@ while : ; do
 	-R|--rpm)    xlocales_package="rpm"; shift;;
 	-D|--deb)    xlocales_package="deb"; shift;;
 	-P|--pkg)    xlocales_package="$2"; shift; shift;;
+	-u|--unicode) xlocales_unicode="1"; shift;;
 	--clear-cache) xlocales_clear_cache="1"; shift;;
 	--clean)     xlocales_clean="1"; shift;;
 	list)
@@ -241,7 +273,10 @@ while : ; do
 	    xlocales_${source}_list | cut -f1
 	    break
 	    ;;
-	fetch|build|diff)
+	diff)
+	    diff_origin "$1" "$2"
+	    ;;
+	fetch|build)
 	    verb="$1"
 	    shift
 	    if [ -z "$1" ] ; then

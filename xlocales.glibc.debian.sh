@@ -156,7 +156,8 @@ xlocales_debian_fetch()
         charmap="$(basename "$charmap_gz" .gz)"
         gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
     done
-        
+
+    # defer to the GNU glibc module for the rest
     xlocales_gnu_configure "$origin" \
 			   "usr/share/i18n/locales" \
 			   "charmaps" \

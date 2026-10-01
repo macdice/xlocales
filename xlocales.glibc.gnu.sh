@@ -83,6 +83,9 @@ xlocales_gnu_configure()
     # already done?
     if [ -e "$src/xlocales.configured" ] ; then return ; fi
 
+    echo "$package_version" > "src/package_version"
+    echo "$locale_version" > "src/libc_version"
+    
     source="$(origin_get_source "$origin")"
     localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
@@ -229,20 +232,18 @@ EOF
 	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
 
 	# Likewise for @unicodeX.Y.Z, collated under locale@unicode or
-	# locale@unicode.SOURCE for non-host sources.
-	#
-	# XXX In theory two major releases of an OS could use two
-	# releases of glibc that use the same Unicode version.  You
-	# won't be able to install them both, so it might become
-	# necessary to disable this or put it in a separate package so
-	# you can skip installing one of them?
-	if [ "$source" = "$xlocales_host_os" ] ; then
-	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode"
-	else
-	    dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode.$source"
+	# locale@unicode.SOURCE for non-host sources.  These conflict
+	# if OSes are released more frequently than Unicode versions,
+	# so this is disabled by default.
+	if [ "$xlocales" = "1" ] ; then
+	    if [ "$source" = "$xlocales_host_os" ] ; then
+		dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode"
+	    else
+		dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@unicode.$source"
+	    fi
+	    printf "\t@mkdir -p $dst_dir\n"
+	    printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"
 	fi
-	printf "\t@mkdir -p $dst_dir\n"
-	printf "\tln -f -s ../locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"	
 
 	# Symlinks with no modifiers are collected under
 	# locale.ORIGIN.  They hide the system locales of the same
@@ -262,7 +263,9 @@ EOF
 	dst_dir="xlocales-system-extra-$origin/$xlocales_system_locales"
 	printf "\t@mkdir -p $dst_dir\n"
 	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
-	printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"
+	if [ "$xlocales_unicode" = "1" ] ; then
+	    printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"
+	fi
 
     done < "$src/supported" >> "$src/Makefile"
     printf "\r\033[K" >&2
