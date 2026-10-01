@@ -131,6 +131,16 @@ EOF
     done
 }
 
+begin_status()
+{
+    printf "$1" >&2
+}
+
+end_status()
+{
+    printf "\r\033[K" >&2
+}
+
 clear_output()
 {
     printf "\r\033[K" >&2

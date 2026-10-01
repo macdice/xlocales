@@ -11,6 +11,7 @@ xlocales_freebsd_desc()
 xlocales_freebsd_release_tags()
 {
     cache_file="$xlocales_cache/freebsd/release_tags"
+
     if [ ! -e "$cache_file" ] ; then
 	mkdir -p "$xlocales_cache/freebsd"
 	git ls-remote --tags "$xlocales_freebsd_url" | cut -f2 | sed 's|refs/tags/||' | \
@@ -20,6 +21,7 @@ xlocales_freebsd_release_tags()
             sort -Vr > "$cache_file.tmp"
 	mv "$cache_file.tmp" "$cache_file"
     fi
+
     cat "$cache_file"
 }
 
@@ -39,12 +41,13 @@ xlocales_freebsd_dir()
 
     url="$xlocales_freebsd_gh_api/contents/$src_path?ref=$src_tag"
 
-    cache_file="$xlocales_cache/freebsd/dir/$src_tag/$src_path"
+    cache_file="$xlocales_cache/freebsd/dir/$src_tag/$src_path.cached"
     if [ -e "$cache_file" ] ; then
 	cat "$cache_file"
 	return
     fi
 
+    begin_status "Fetching directory $url"
     response="$(curl -s \
                 -H "Accept: application/vnd.github+json" \
               	-H "User-Agent: https://github.com/macdice/xlocales configure script" \
@@ -54,7 +57,8 @@ xlocales_freebsd_dir()
         echo "Could not fetch $url: $response" >&2
 	exit 1
     fi
-
+    end_status
+    
     mkdir -p "$(dirname "$cache_file")"
     for file in $(echo "$response" | sed 's/"name":"\([^"]*\)"/\
 name=\1\
@@ -70,7 +74,7 @@ xlocales_freebsd_fetch_dir()
     origin="$1"
     tag="$2"
     dir="$3"
-    
+
     src="$xlocales_src/$origin"
 
     mkdir -p "$src/$dir"
@@ -80,7 +84,7 @@ xlocales_freebsd_fetch_dir()
 }
 
 xlocales_freebsd_list()
-{
+{    
     last_version=""
     for tag in $(xlocales_freebsd_release_tags) ; do
 	full_version="$(echo "$tag" | sed 's/^[^0-9]*//')"
@@ -112,13 +116,10 @@ xlocales_freebsd_fetch()
 
     mkdir -p "$src"
 
-    for dir in "share/colldef" \
-	       "share/ctypedef" \
-	       "share/monetdef" \
-	       "share/msgdef" \
-	       "share/numericdef" \
-	       "share/timedef" ; do
-	xlocales_freebsd_fetch_dir "$origin" "$tag" "$dir"
+    for share_dir in $(xlocales_freebsd_dir "$tag" "share") ; do
+	case "$share_dir" in
+	    *def*) xlocales_freebsd_fetch_dir "$origin" "$tag" "share/$share_dir";;
+	esac
     done
 	       
     #xlocales_freebsd_fetch_dir "$origin" "$tag" "share/colldef"
