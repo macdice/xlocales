@@ -30,30 +30,30 @@ fi
 xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
 
 case "$ID" in
-    freebsd) xlocales_max_libc_version="$host_version"
+    freebsd) xlocales_max_libc_version="$xlocales_host_os_version"
 	     xlocales_min_libc_version="11.0"
-             xlocales_version_mod_prefix="cldr"
+	     xlocales_version_mod_prefix="cldr"
 	     xlocales_default_source="freebsd"
 	     xlocales_sources="freebsd"
-             xlocales_jobs="$(sysctl -n hw.cpu)"	     
-             xlocales_prefix="/usr/local"
+	     xlocales_jobs="$(sysctl -n hw.ncpu)"
+	     xlocales_prefix="/usr/local"
 	     xlocales_infix="share"
 	     xlocales_system_locales="/usr/share/locale"
 	     xlocales_package="pkg"
 	     . "$xlocales_script_basename.freebsd.sh"
 	     ;;
-    
+
     *)       xlocales_max_libc_version="$(getconf GNU_LIBC_VERSION | \
-                         		sed 's/.* \([0-9]\.[0-9][0-9]*\)$/\1/')"
-             if [ "$?" != "0" -o -z "$xlocales_max_libc_version" ] ; then
+					sed 's/.* \([0-9]\.[0-9][0-9]*\)$/\1/')"
+	     if [ "$?" != "0" -o -z "$xlocales_max_libc_version" ] ; then
 		 echo "Host libc/localedef not supported."
 		 exit 1
 	     fi
 	     xlocales_min_libc_version="2.28"
 	     xlocales_version_mod_prefix="glibc"
 	     xlocales_default_source="gnu"
-             xlocales_jobs="$(nproc)"
-             xlocales_prefix="/usr"
+	     xlocales_jobs="$(nproc)"
+	     xlocales_prefix="/usr"
 	     xlocales_infix="lib"
 	     xlocales_system_locales="/usr/lib/locale"
 
@@ -69,11 +69,11 @@ case "$ID" in
 	     for module in $(ls $xlocales_script_basename.glibc.*.sh) ; do
 		 module_os="$(echo "$module" | sed 's/.*\.glibc\.\(.*\)\.sh/\1/')"
 		 . "$xlocales_script_basename.glibc.${module_os}.sh"
-                 xlocales_sources="$xlocales_sources $module_os"
+		 xlocales_sources="$xlocales_sources $module_os"
 		 if [ "$module_os" = "$xlocales_host_os" ] ; then
 		     xlocales_default_source="$module_os"
 		 fi
-	     done 
+	     done
 	     ;;
 esac
 
@@ -81,7 +81,7 @@ esac
 # semantics.
 xlocales_version_le()
 {
-    printf '%s\n%s\n' "$1" "$2" | sort -CV
+    printf '%s\n%s\n' "$1" "$2" | sort -V --check=silent
 }
 
 origin_get_source()
@@ -115,13 +115,13 @@ Usage: $0 [options...] command
  Commands:
    list [source]              lists (default: $xlocales_default_source)
    fetch [source|origin]...   fetches, unpacks, creates makefiles
-   build [source|origin]...   builds and packages
+   build [source|origin]...   builds and packages, fetching first if required
    clean [source|origin]...   wipe all temporary files
 
  Host information:
    OS:                        $xlocales_host_os
    OS version:                $xlocales_host_os_version
-   libc version:              $xlocales_host_libc_version
+   libc version:              $xlocales_max_libc_version
 
  Available sources:
 EOF
@@ -244,10 +244,10 @@ diff_origin()
 
 while : ; do
     case "$1" in
-        -b|--build)  xlocales_build="$2";  shift; shift;;
-        -c|--cache)  xlocales_cache="$2";  shift; shift;;
-        -s|--src)    xlocales_src="$2";    shift; shift;;
-        -p|--prefix) xlocales_prefix="$2"; shift; shift;;
+	-b|--build)  xlocales_build="$2";  shift; shift;;
+	-c|--cache)  xlocales_cache="$2";  shift; shift;;
+	-s|--src)    xlocales_src="$2";    shift; shift;;
+	-p|--prefix) xlocales_prefix="$2"; shift; shift;;
 	-j|--jobs)   xlocales_jobs="$2";   shift; shift;;
 	-s|--silent) xlocales_silent="-s"; shift;;
 	-H|--homepage) xlocales_homepage="$2"; shift; shift;;
