@@ -40,8 +40,8 @@ xlocales_debian_cat_packages_file()
     repo_base_url="$2"
     codename="$3"
 
-    cache_file="$xlocales_cache/debian/$codename.main"
-    xlocales_fetch "$repo_base_url/dists/$codename/main" "$cache_file"
+    cache_file="$xlocales_cache/$origin/$codename.main"
+    xlocales_fetch "$origin" "$repo_base_url/dists/$codename/main" "$cache_file"
 
     if grep -q "binary-all" "$cache_file" ; then
 	# modern Debian has locales in "binary-all"
@@ -84,10 +84,11 @@ xlocales_debian_get_package_url()
     origin="$1"
     package_name="$2"
 
-    # XXX xlocales_debian_fetch_packages_file() must have run
     base_url="$(cat "$xlocales_cache/$origin/Packages.base_url")"
 
-    filename="$(xlocales_debian_get_package_field "$origin" "locales" "Filename")"
+    filename="$(xlocales_debian_get_package_field "$origin" \
+    						  "locales" \
+						  "Filename")"
 
     echo "$base_url/$filename"
 }
@@ -129,14 +130,13 @@ xlocales_debian_fetch_packages_file()
 xlocales_debian_list()
 {
     for v in $(xlocales_debian_distro_info_for_source "debian" | \
-		   cut -d, -f1 | sort -Vr) ; do
-
+	       cut -d, -f1 | \
+	       sort -Vr) ; do
 	if ! xlocales_version_le "$xlocales_debian_min" "$v" ; then
 	    continue
 	fi
 
 	origin="debian$v"
-
 	xlocales_debian_fetch_packages_file "$origin"
 
 	package_version="$(xlocales_debian_get_package_field "$origin" \

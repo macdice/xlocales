@@ -208,7 +208,7 @@ xlocales_fetch()
     dst="$3"
 
     if [ ! -e "$dst" ] ; then
-        xlocales_begin_status "fetching $url"
+        xlocales_begin_status "$origin_or_source: fetching $url"
         mkdir -p "$(dirname "$dst")"
         curl -L -f -s -S "$url" > "$dst.tmp"
         mv "$dst.tmp" "$dst"
