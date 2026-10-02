@@ -188,9 +188,9 @@ xlocales_begin_status()
     fi
     
     if [ ${#string} -gt $(($COLUMNS - 3)) ] ; then	
-        printf "%.*s..." $((COLUMNS - 6)) "$string" >&2
+        printf "%.*s... " $((COLUMNS - 6)) "$string" >&2
     else
-        printf "%s" "$string" >&2
+        printf "%s " "$string" >&2
     fi
 }
 
