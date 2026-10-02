@@ -9,14 +9,11 @@ xlocales_gnu_list()
 {
     index_file="$xlocales_cache/gnu/index.html"
 
-    fetch_src "$xlocales_gnu_url/" "$index_file"
+    xlocales_fetch "gnu" "$xlocales_gnu_url/" "$index_file"
     for locale_version in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
-        if ! xlocales_version_le "$xlocales_min_libc_version" "$locale_version" ; then
-            continue
-        fi
-        if ! xlocales_version_le "$locale_version" "$xlocales_max_libc_version" ; then
-            continue
-        fi
+
+        if ! xlocales_libc_version_in_range "$locale_version" ; then continue ; fi
+
         echo "gnu$locale_version" "$locale_version"
     done
 }
@@ -25,26 +22,42 @@ xlocales_gnu_fetch()
 {
     origin="$1"
 
-    version="$(origin_get_version "$origin")"
-    src="$xlocales_src/$origin"    
+    version="$(xlocales_origin_get_version "$origin")"
+    src="$xlocales_src/$origin"
 
     if [ -e "$src/xlocales.configured" ] ; then return ; fi
-    
-    version="$(origin_get_version "$origin")"
+
+    xlocales_check_libc_version_supported "$version"
+
     url="$xlocales_gnu_url/glibc-$version.tar.xz"
     tarball="$xlocales_cache/$origin/glibc-$version.tar.xz"
-    
+
     mkdir -p "$src/build"
-    fetch_src "$url" "$tarball"
+    xlocales_fetch "$origin" "$url" "$tarball"
+
+    xlocales_begin_status "$origin: extracting $src"
     tar xf "$tarball" -C "$src"
+    xlocales_end_status
 
     (
         # Unlike downstream distributions, which ship the locale
         # definitions ready-made, here we need to configure and
         # compile a couple of things first.
         cd "$src/build"
-        ../glibc-$version/configure --quiet --prefix=/tmp/dummy --srcdir "../glibc-$version" --disable-sanity-checks
-        make $xlocales_silent localedata/subdir_lib
+        # We don't really need texinfo, so keep configure quiet
+        cat > dummy_makeinfo <<EOF
+#!/bin/sh
+echo "GNU texinfo.dummy 7.3"
+EOF
+        chmod +x dummy_makeinfo
+
+        xlocales_begin_status "$origin: configuring glibc"
+        ../glibc-$version/configure --quiet --prefix=/tmp/dummy --srcdir "../glibc-$version" --disable-sanity-checks MAKEINFO=$(pwd)/dummy_makeinfo
+        xlocales_end_status
+
+        xlocales_begin_status "$origin: building localedata/subdir_lib"
+        make -s localedata/subdir_lib > "make.log"
+        xlocales_end_status
     )
 
     xlocales_gnu_configure "$origin" \
@@ -59,7 +72,7 @@ xlocales_gnu_munge_name()
 {
     # en_US.UTF-8 -> en_US.utf8, just to confuse everyone
     prefix="$(echo "$1" | cut -d. -f1)"
-    opt_codeset="$(echo "$1" | sed 's/^[^.]*//')"       
+    opt_codeset="$(echo "$1" | sed 's/^[^.]*//')"
     opt_codeset_munged="$(echo "$opt_codeset" | \
                           sed 's/[^.a-zA-Z0-9]//g' | \
                           tr '[:upper:]' '[:lower:]')"
@@ -82,7 +95,7 @@ xlocales_gnu_configure()
     url="$4"
     locale_version="$5"
     package_version="$6"
-    
+
     src="$xlocales_src/$origin"
 
     # already done?
@@ -90,26 +103,26 @@ xlocales_gnu_configure()
 
     echo "$package_version" > "src/package_version"
     echo "$locale_version" > "src/libc_version"
-    
-    source="$(origin_get_source "$origin")"
-    localedef_version="$(localedef --version | head -1 | sed 's/.* //')"
 
+    source="$(xlocales_origin_get_source "$origin")"
+    localedef_version="$xlocales_max_libc_version"    
+    
     mkdir -p "$src/localedata"
 
     # Inject version into LC_IDENTIFICATION revision field for each
     # locale definition; this provides a robust way to confirm that
-    # opening "en_US@glibc2.31" actually opened 2.31, and didn't
-    # silently drop the modifier because it wasn't found, but this
-    # convention is made up.
+    # opening "en_US@glibc2.31" actually opened a locale that
+    # identifies as coming from 2.31 locale data, i.e. it didn't
+    # silently drop the modifier because it wasn't found.
     #
     # There is already potentially useful information in there in
     # the source: the Unicode version version used to generate ctype.
     # Unfortunately it does not survive into compiled locales, so
     # let's invent a format for bolting arbitrary extra version on
     # after the stagnant "1.0" that most locales report.
-    unicode_version="$(sed -n 's/^revision *\"\(.*\)\"$/\1/p' < "$src/$locales_dir/i18n_ctype" | head -1)"    
+    unicode_version="$(sed -n 's/^revision *\"\(.*\)\"$/\1/p' < "$src/$locales_dir/i18n_ctype" | head -1)"
     for locale_src in $(ls "$src/$locales_dir") ; do
-        sed "s/^\(revision *\".*\)\"$/\1; xlocales=$xlocales_version; origin=$origin; unicode=$unicode_version; localedef=$localedef_version; localedata=$version\"/" \
+        sed "s/^\(revision *\".*\)\"$/\1; origin=$origin; unicode=$unicode_version; localedef=$localedef_version; localedata=$version\"/" \
         < "$src/$locales_dir/$locale_src" \
         > "$src/localedata/$locale_src"
     done
@@ -118,9 +131,9 @@ xlocales_gnu_configure()
     mkdir -p "xlocales-system-$origin"
     mkdir -p "xlocales-system-extra-$origin"
 
-    printf "Generating $src/Makefile..." >&2    
+    xlocales_begin_status "$origin: generating $src/Makefile"
     echo > "$src/Makefile"
-    
+
     case "$xlocales_package" in
     deb)
         package_arch="$(dpkg --print-architecture)"
@@ -131,6 +144,7 @@ xlocales_gnu_configure()
         else
             opt_source=".$source"
         fi
+
         cat <<EOF > "$src/xlocales-$origin/DEBIAN/control"
 Package: xlocales-$origin
 Version: $package_version
@@ -180,33 +194,34 @@ Description: @glibc$locale_version and @unicode$unicode_version in system locale
 EOF
         ;;
     esac
-    
-    # convert the SUPPORTED file, which lists the names and charmaps
-    # to compile, into an easy to parse format; this happens to be the
-    # same format that Debian/Ubuntu ship, so check if it's already
-    # been put there by the those fetch routines.
+
+    # Convert the SUPPORTED file, which lists the names and charmaps
+    # combinations to compile, into an easy to parse format; this
+    # happens to be the same format that Debian/Ubuntu ship, so check
+    # if it's already been put there by the those fetch routines.
     if [ ! -e "$src/supported" ] ; then
         grep '/' "$src/glibc-$version/localedata/SUPPORTED" | \
         sed 's/ .*$//;s|/| |' > "$src/supported"
     fi
 
-    # generate "all" target
+    # Generate "all" target
     while read -r locale charmap ; do
         locale="$(xlocales_gnu_munge_name "$locale")"
         locale_dst="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin"
         echo "LOCALES+=$locale_dst"
-        done < "$src/supported"    >> "$src/Makefile"    
-        echo 'all: $(LOCALES) $(PACKAGES)' >> "$src/Makefile"
+    done < "$src/supported"    >> "$src/Makefile"
+    echo 'all: $(LOCALES) $(PACKAGES)' >> "$src/Makefile"
 
-        # generate the package target rule
-        case "$xlocales_package" in
-            deb)
-                echo '%.deb: $(LOCALES)' >> "$src/Makefile"
-                printf "\tdpkg-deb --root-owner-group -b \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$(notdir \$@)) \$(dir \$@)\n" >> "$src/Makefile"
+    # Generate the package target rule
+    case "$xlocales_package" in
+        deb)
+            echo '%.deb: $(LOCALES)' >> "$src/Makefile"
+            printf "\tdpkg-deb --root-owner-group -b \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$(notdir \$@)) \$(dir \$@) 2> dpkg-\$\$\$\$.log >&2 || (cat dpkg-\$\$\$\$.log >&2 && false)\n" >> "$src/Makefile"
+            printf "\trmdir \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$@)"
             ;;
-        esac   
+    esac
 
-    # generate target for each locale
+    # Generate target for each locale
     while read -r locale charmap ; do
         locale="$(xlocales_gnu_munge_name "$locale")"
         locale_dst_dir="xlocales-$origin/$xlocales_prefix/$xlocales_infix/locale@$source"
@@ -214,7 +229,7 @@ EOF
         locale_src="localedata/$(echo "$locale" | cut -d. -f1)"
 
         echo "$locale_dst: $locale_src"
-    
+
         # Cross-compiled locales with @origin modifiers are collected
         # under locales@source, so if you install xlocales-debian12
         # and xlocales-debian13 then /usr/lib/locales@debian will
@@ -264,16 +279,15 @@ EOF
         printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@$origin\n"
 
         # Optional extra symlinks to make eg en_US.utf8@glibc2.31 and
-        # en_US.utf*@unicode13.0.0 available without setting LOCPATH.
+        # en_US.utf8@unicode13.0.0 available without setting LOCPATH.
         dst_dir="xlocales-system-extra-$origin/$xlocales_system_locales"
         printf "\t@mkdir -p $dst_dir\n"
         printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@glibc$locale_version\n"
         if [ "$xlocales_unicode" = "1" ] ; then
             printf "\tln -f -s $xlocales_prefix/$xlocales_infix/locale@$source/$locale@$origin $dst_dir/$locale@unicode$unicode_version\n"
         fi
-
     done < "$src/supported" >> "$src/Makefile"
-	end_status
+    xlocales_end_status
 
     touch "$src/xlocales.configured"
 }

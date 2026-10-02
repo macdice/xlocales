@@ -5,59 +5,61 @@ xlocales_debian_desc()
     echo "Debian 'locales' packages"
 }
 
-debian_distro_info_data_for_source()
+xlocales_debian_distro_info_for_source()
 {
     source="$1"
 
     url="https://debian.pages.debian.net/distro-info-data/$source.csv"
     file="$xlocales_cache/$source/$source.csv"
 
-    fetch_src "$url" "$file"
+    xlocales_fetch "$source" "$url" "$file"
     # filter out title line and lines with no release date...
     grep -E '^[0-9][^,]*,[^,]*,[^,]*,[^,]*,[0-9]' "$file"
 }
 
-debian_codename_for_origin()
+xlocales_debian_codename_for_origin()
 {
     origin="$1"
 
-    source="$(origin_get_source "$origin")"
-    version="$(origin_get_version "$origin")"
-    codename="$(debian_distro_info_data_for_source "$source" | \
-    	      grep "^$version[, ]" | \
-              cut -d, -f3)"    
+    source="$(xlocales_origin_get_source "$origin")"
+    version="$(xlocales_origin_get_version "$origin")"
+    codename="$(xlocales_debian_distro_info_for_source "$source" | \
+	      grep "^$version[, ]" | \
+	      cut -d, -f3)"
+
     if [ -z "$codename" ] ; then
-	echo "debian_codename_for_origin: could not find codename for source=$source, version=$version" >&2
-	exit 1
+	xlocales_error "xlocales_debian_codename_for_origin: could not find codename for source=$source, version=$version"
     fi
 
     echo "$codename"
 }
 
-debian_cat_packages_file()
+xlocales_debian_cat_packages_file()
 {
-    repo_base_url="$1"
-    codename="$2"
+    origin="$1"
+    repo_base_url="$2"
+    codename="$3"
 
     cache_file="$xlocales_cache/debian/$codename.main"
-    fetch_src "$repo_base_url/dists/$codename/main" "$cache_file"
-    
+    xlocales_fetch "$repo_base_url/dists/$codename/main" "$cache_file"
+
     if grep -q "binary-all" "$cache_file" ; then
 	# modern Debian has locales in "binary-all"
-        arch="all"
+	arch="all"
     else
-        # older Debian and all Ubuntu have a copy for each
-        # architecture, so just pick one
-        arch="amd64"
+	# older Debian and all Ubuntu have a copy for each
+	# architecture, so just pick one
+	arch="amd64"
     fi
 
     url="$repo_base_url/dists/$codename/main/binary-$arch/Packages.gz"
-    printf "Fetching $url..." >&2    
+
+    xlocales_begin_status "$origin: fetching packages file $url"
     curl -f -s -S "$url" | gzip -d
-    printf "\r\033[K" >&2
+    xlocales_end_status
 }
 
-debian_get_package_field()
+xlocales_debian_get_package_field()
 {
     origin="$1"
     package_name="$2"
@@ -67,28 +69,30 @@ debian_get_package_field()
     cache_file="$xlocales_cache/$origin/$package_name.$package_field"
 
     if [ ! -e "$cache_file" ] ; then
-        awk "BEGIN { in_package = 0; }
-             /^Package: $package_name\$/ { in_package = 1; }
-             /^$package_field: / { if (in_package) { gsub(/^[^ ]* /, \"\"); print; } }
-             /^ *\$/ { in_package = 0; }" < "$packages_file" > "$cache_file.tmp"
+	awk "BEGIN { in_package = 0; }
+	     /^Package: $package_name\$/ { in_package = 1; }
+	     /^$package_field: / { if (in_package) { gsub(/^[^ ]* /, \"\"); print; } }
+	     /^ *\$/ { in_package = 0; }" < "$packages_file" > "$cache_file.tmp"
 	mv "$cache_file.tmp" "$cache_file"
     fi
 
     cat "$cache_file"
 }
 
-debian_get_package_url()
+xlocales_debian_get_package_url()
 {
     origin="$1"
     package_name="$2"
 
+    # XXX xlocales_debian_fetch_packages_file() must have run
     base_url="$(cat "$xlocales_cache/$origin/Packages.base_url")"
-    filename="$(debian_get_package_field "$origin" "locales" "Filename")"
+
+    filename="$(xlocales_debian_get_package_field "$origin" "locales" "Filename")"
 
     echo "$base_url/$filename"
 }
 
-debian_fetch_packages_file()
+xlocales_debian_fetch_packages_file()
 {
     origin="$1"
 
@@ -96,37 +100,53 @@ debian_fetch_packages_file()
 
     if [ ! -e "$packages_file" ] ; then
 	mkdir -p "$xlocales_cache/$origin"
-	codename="$(debian_codename_for_origin "$origin")"
-	if curl -f -s -S "https://archive.debian.org/debian/dists/" | grep ">$codename/" > /dev/null ; then
+	codename="$(xlocales_debian_codename_for_origin "$origin")"
+
+	xlocales_begin_status "$origin: checking if $codename is in archive repo"
+	if curl -f -s -S "https://archive.debian.org/debian/dists/" | \
+		grep ">$codename/" > /dev/null
+	then
 	    # it's in archive repo
-            repo_base_url="https://archive.debian.org/debian"
+	    repo_base_url="https://archive.debian.org/debian"
 	else
 	    # it's in main repo
-            repo_base_url="http://ftp.debian.org/debian"
+	    repo_base_url="http://ftp.debian.org/debian"
 	fi
+	xlocales_end_status
+
+	# Remember where it is.  This is used by
+	# xlocales_debian_get_package_url().
 	echo "$repo_base_url" > "$xlocales_cache/$origin/Packages.base_url"
-	debian_cat_packages_file "$repo_base_url" "$codename" > "$packages_file.tmp"
+	
+	xlocales_debian_cat_packages_file "$origin" \
+					  "$repo_base_url" \
+					  "$codename" \
+					  > "$packages_file.tmp"
 	mv "$packages_file.tmp" "$packages_file"
     fi
 }
 
 xlocales_debian_list()
 {
-    for v in $(debian_distro_info_data_for_source "debian" | cut -d, -f1 | sort -Vr) ; do
+    for v in $(xlocales_debian_distro_info_for_source "debian" | \
+		   cut -d, -f1 | sort -Vr) ; do
+
 	if ! xlocales_version_le "$xlocales_debian_min" "$v" ; then
 	    continue
 	fi
+
 	origin="debian$v"
-	debian_fetch_packages_file "$origin"
-	package_version="$(debian_get_package_field "$origin" "locales" "Version")"
-	package_version="$(echo "$package_version" | sed 's/\+.*$//')"
-	locale_version="$(echo "$package_version" | sed 's/^\([0-9]*\.[0-9]*\).*/\1/')"
-	if ! xlocales_version_le "$xlocales_min_libc_version" "$locale_version" ; then
-	    continue
-	fi
-	if ! xlocales_version_le "$locale_version" "$xlocales_max_libc_version" ; then
-	    continue
-	fi
+
+	xlocales_debian_fetch_packages_file "$origin"
+
+	package_version="$(xlocales_debian_get_package_field "$origin" \
+							     "locales" \
+							     "Version")"
+	locale_version="$(echo "$package_version" | \
+			  sed 's/^\([0-9]*\.[0-9]*\).*/\1/')"
+
+	if ! xlocales_libc_version_in_range "$locale_version" ; then continue ; fi
+
 	echo "$origin" "$package_version"
     done
 }
@@ -135,27 +155,36 @@ xlocales_debian_fetch()
 {
     origin="$1"
 
-    src="$xlocales_src/$origin"    
+    src="$xlocales_src/$origin"
 
     if [ -e "$src/xlocales.configured" ] ; then return ; fi
 
-    package_url="$(debian_get_package_url "$origin" "locales")"
+    package_url="$(xlocales_debian_get_package_url "$origin" "locales")"
     file="$xlocales_cache/$origin/$(basename "$package_url")"
-    fetch_src "$package_url" "$file"
-    locale_version="$(basename "$package_url" | sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
-    package_version="$(debian_get_package_field "$origin" "locales" "Version")"
 
+    xlocales_fetch "$origin" "$package_url" "$file"
+
+    locale_version="$(basename "$package_url" | \
+    		      sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
+    package_version="$(xlocales_debian_get_package_field "$origin" \
+    							 "locales" \
+							 "Version")"
+
+    xlocales_check_libc_version_supported "$locale_version"
+    
     mkdir -p "$src"
+    
+    xlocales_begin_status "$origin: extracting $file"
     ar --output "$src" x "$file"
     ( cd "$src" ; tar xf data.tar.* )
     cp "$src/usr/share/i18n/SUPPORTED" "$src/supported"
-
     mkdir -p "$src/charmaps"
     for charmap_gz in $(ls "$src/usr/share/i18n/charmaps") ; do
-        charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
-        charmap="$(basename "$charmap_gz" .gz)"
-        gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
+	charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
+	charmap="$(basename "$charmap_gz" .gz)"
+	gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
     done
+    xlocales_end_status
 
     # defer to the GNU glibc module for the rest
     xlocales_gnu_configure "$origin" \
@@ -170,13 +199,16 @@ xlocales_debian_diff()
 {
     xorigin="$1"
 
-    package_version="$(debian_get_package_field "$origin" "locales" "Version")"
-    locale_version="$(echo "$package_version" | sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
+    package_version="$(debian_get_package_field "$origin" \
+    						"locales" \
+						"Version")"
+    locale_version="$(echo "$package_version" | \
+    		      sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
     upstream="gnu$locale_version"
     #src="$xlocales_src/$origin"
     #gnu="$xlocales_src/$upstream"
-    
-    xlocales_debian_fetch "$xorigin"
+
+    xlocales_debian_fetch "$origin"
     xlocales_gnu_fetch "$upstream"
 
     src="$xlocales_src/$xorigin"
@@ -199,3 +231,5 @@ xlocales_debian_diff()
 	fi
     done
 }
+
+#
