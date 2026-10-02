@@ -154,10 +154,10 @@ fetch_src()
 
     if [ ! -e "$dst" ] ; then
 	mkdir -p "$(dirname "$dst")"
-	printf "Fetching $url..." >&2
-	curl -f -s -S "$url" > "$dst.tmp"
+	begin_status "Fetching $url"
+	curl -L -f -s -S "$url" > "$dst.tmp"
 	mv "$dst.tmp" "$dst"
-	clear_output
+	end_status
     fi
 }
 
