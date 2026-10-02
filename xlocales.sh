@@ -13,13 +13,16 @@ xlocales_cache="cache"
 xlocales_src="src"
 xlocales_jobs="1"
 xlocales_silent=""
+xlocales_quiet=""
 xlocales_homepage="https://github.com/macdice/xlocales"
 xlocales_maintainer="Thomas Munro <thomas.munro@gmail.com>"
 xlocales_unicode="auto"
 
 xlocales_log()
 {
-    echo "$1" >&2
+	if [ -z "$xlocales_quiet" ] ; then
+        echo "$1" >&2
+    fi
 }
 
 xlocales_error()
@@ -280,21 +283,23 @@ diff_origin()
 
 while : ; do
     case "$1" in
-        -b|--build)  xlocales_build="$2";  shift; shift;;
-        -c|--cache)  xlocales_cache="$2";  shift; shift;;
-        -s|--src)    xlocales_src="$2";    shift; shift;;
-        -p|--prefix) xlocales_prefix="$2"; shift; shift;;
-        -j|--jobs)   xlocales_jobs="$2";   shift; shift;;
-        -s|--silent) xlocales_silent="-s"; shift;;
-        -H|--homepage) xlocales_homepage="$2"; shift; shift;;
+        -b|--build)      xlocales_build="$2";  shift; shift;;
+        -c|--cache)      xlocales_cache="$2";  shift; shift;;
+        -s|--src)        xlocales_src="$2";    shift; shift;;
+        -p|--prefix)     xlocales_prefix="$2"; shift; shift;;
+        -j|--jobs)       xlocales_jobs="$2";   shift; shift;;
+        -s|--silent)     xlocales_silent="-s"; shift;;
+        -q|--quiet)      xlocales_quiet="1"; shift;;
+        -H|--homepage)   xlocales_homepage="$2"; shift; shift;;
         -M|--maintainer) xlocales_maintainer="$2"; shift; shift;;
-        -T|--tar)    xlocales_package="tar"; shift;;
-        -R|--rpm)    xlocales_package="rpm"; shift;;
-        -D|--deb)    xlocales_package="deb"; shift;;
-        -P|--pkg)    xlocales_package="$2"; shift; shift;;
-        -u|--unicode) xlocales_unicode="1"; shift;;
-        --clear-cache) xlocales_clear_cache="1"; shift;;
-        --clean)     xlocales_clean="1"; shift;;
+        -T|--tar)        xlocales_package="tar"; shift;;
+        -R|--rpm)        xlocales_package="rpm"; shift;;
+        -D|--deb)        xlocales_package="deb"; shift;;
+        -P|--pkg)        xlocales_package="$2"; shift; shift;;
+        -u|--unicode)    xlocales_unicode="1"; shift;;
+        --clear-cache)   xlocales_clear_cache="1"; shift;;
+        --clean)         xlocales_clean="1"; shift;;
+
         list)
             shift
             if [ -n "$1" ] ; then
@@ -309,9 +314,11 @@ while : ; do
             xlocales_${source}_list | cut -f1
             break
             ;;
+
         diff)
             diff_origin "$1" "$2"
             ;;
+
         fetch|build)
             verb="$1"
             shift
@@ -327,6 +334,7 @@ while : ; do
             fi
             break
             ;;
+
         *) show_help;;
     esac
 done

@@ -39,9 +39,9 @@ xlocales_gnu_fetch()
     tar xf "$tarball" -C "$src"
 
     (
-    # Unlike downstream distributions, which ship the locale
-    # definitions ready-made, here we need to configure and
-    # compile a couple of things first.
+        # Unlike downstream distributions, which ship the locale
+        # definitions ready-made, here we need to configure and
+        # compile a couple of things first.
         cd "$src/build"
         ../glibc-$version/configure --quiet --prefix=/tmp/dummy --srcdir "../glibc-$version" --disable-sanity-checks
         make $xlocales_silent localedata/subdir_lib
