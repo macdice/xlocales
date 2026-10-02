@@ -217,7 +217,7 @@ EOF
         deb)
             echo '%.deb: $(LOCALES)' >> "$src/Makefile"
             printf "\tdpkg-deb --root-owner-group -b \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$(notdir \$@)) \$(dir \$@) 2> dpkg-\$\$\$\$.log >&2 || (cat dpkg-\$\$\$\$.log >&2 && false)\n" >> "$src/Makefile"
-            printf "\trmdir \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$@)"
+            printf "\trmdir \$(patsubst %%_${package_version}_${package_arch}.deb,%%,\$@)\n" >> "$src/Makefile"
             ;;
     esac
 
