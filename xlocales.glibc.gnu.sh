@@ -122,7 +122,7 @@ xlocales_gnu_configure()
     # after the stagnant "1.0" that most locales report.
     unicode_version="$(sed -n 's/^revision *\"\(.*\)\"$/\1/p' < "$src/$locales_dir/i18n_ctype" | head -1)"
     for locale_src in $(ls "$src/$locales_dir") ; do
-        sed "s/^\(revision *\".*\)\"$/\1; origin=$origin; unicode=$unicode_version; localedef=$localedef_version; localedata=$version\"/" \
+        sed "s/^\(revision *\".*\)\"$/\1; origin=$origin; unicode=$unicode_version; localedef=$localedef_version; localedata=$locale_version\"/" \
         < "$src/$locales_dir/$locale_src" \
         > "$src/localedata/$locale_src"
     done
