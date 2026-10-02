@@ -54,7 +54,7 @@ xlocales_debian_cat_packages_file()
 
     url="$repo_base_url/dists/$codename/main/binary-$arch/Packages.gz"
 
-    xlocales_begin_status "$origin: fetching packages file $url"
+    xlocales_begin_status "$origin: fetching $url"
     curl -f -s -S "$url" | gzip -d
     xlocales_end_status
 }

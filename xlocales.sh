@@ -137,7 +137,7 @@ xlocales_origin_get_version()
 }
 
 # Show help and exit.
-show_help()
+xlocales_help()
 {
     cat >&2 <<EOF
 Usage: $0 [options...] command
