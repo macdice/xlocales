@@ -40,7 +40,7 @@ else
     fi
 fi
 
-if [ -t 2 ] ; then is_terminal=1 fi
+if [ -t 2 ] ; then is_terminal=1 ; fi
 
 if [ -z "$is_quiet" ] ; then
     echo "Compiling locale data from @origin@ with $localedef_version"

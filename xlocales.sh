@@ -14,7 +14,8 @@
 
 set -e
 
-xlocales_build="build"
+#xlocales_build="build"
+xlocales_stage="stage"
 xlocales_cache="cache"
 xlocales_src="src"
 xlocales_jobs="1"
@@ -49,15 +50,15 @@ fi
 
 xlocales_script_basename="$(echo "$0" | sed 's/\.sh$//')"
 
+. "$xlocales_script_basename.tar.sh"
+
 case "$ID" in
     freebsd)
         xlocales_max_libc_version="$xlocales_host_os_version"
         xlocales_min_libc_version="11.0"
         xlocales_default_source="freebsd"
         xlocales_sources="freebsd"
-        xlocales_jobs="$(sysctl -n hw.ncpu)"
         xlocales_prefix="/usr/local"
-        xlocales_infix="share"
         xlocales_system_locales="/usr/share/locale"
         xlocales_package="pkg"
         . "$xlocales_script_basename.freebsd.sh"
@@ -74,10 +75,8 @@ case "$ID" in
         fi
         xlocales_min_libc_version="2.28"
         xlocales_default_source="gnu"
-        xlocales_jobs="$(nproc)"
-        xlocales_prefix="usr"
-        #xlocales_infix="lib"
-        xlocales_system_locales="usr/lib/locale"
+        xlocales_prefix="/usr"
+        xlocales_system_locales="/usr/lib/locale"
 
         # Guess default type of package without hardcoding distribution names.
         if [ -e "/var/lib/dpkg" ] ; then
@@ -163,12 +162,19 @@ Usage: $0 [options...] command
 
    -H|--homepage "https..."   Maintainer URL included in packages
    -M|--maintainer "..."      Maintainer "name <email>" included in packages
-   -P|--package format        one of deb|rpm|pkg|tar|none (default: $xlocales_package)
 
  Commands:
-   list [source]              lists (default: $xlocales_default_source)
-   fetch [source|origin]...   fetches, unpacks, creates makefiles
-   build [source|origin]...   builds and packages, fetching first if required
+   list [source]              lists origins from source (default: $xlocales_default_source)
+   fetch [source|origin]...   fetches, unpacks source
+   build [source|origin]...   builds standard layout in --build
+
+   deb [source|origin]...     builds Debian binary package(s) for glibc
+   deb-src [source|origin]... builds Debian source package(s) for glibc
+   rpm [source|origin]...     builds RPM binary package(s) for glibc
+   srpm [source|origin]...    builds RPM binary package(s) for glibc
+   pkg [source|origin]...     builds pkg-ng package(s) for FreeBSD
+   tar [source|origin]...     builds tarball(s)
+
    clean [source|origin]...   wipe all temporary files
 
  Host information:
@@ -267,32 +273,43 @@ xlocales_fetch_origin()
 
     source="$(xlocales_origin_get_source "$origin")"
 
-    if [ -n "$xlocales_clear_cache" ] ; then
-        rm -fr "$xlocales_cache/$origin"
-    fi
-
-    if [ ! -e "$xlocales_source/$origin/fetch.done" ] ; then
-        xlocales_${source}_fetch "$origin"
-    fi
+    rm -fr "$xlocales_src/$origin"    
+    xlocales_${source}_fetch "$origin"
+    touch "$xlocales_src/$origin/done"
 }
 
-xlocales_build_source()
+xlocales_stage_source()
 {
     source="$1"
 
     for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
-        xlocales_build_origin "$origin"
-	    xlocales_log "$origin"
+        xlocales_stage_origin "$origin"
     done
 }
 
-xlocales_build_origin()
+xlocales_stage_origin()
 {
     origin="$1"
-    source="$(xlocales_origin_get_source "$origin")"
 
-    #xlocales_fetch_origin "$origin"
-    xlocales_${source}_build "$origin"
+    if [ ! -e "$xlocales_src/$origin/done" ] ; then
+        xlocales_fetch_origin "$origin"
+    fi
+
+    rm -fr "$xlocales_stage/$origin"
+    
+    source="$(xlocales_origin_get_source "$origin")"
+    xlocales_${source}_stage "$origin"
+
+    touch "$xlocales_stage/$origin/done"
+}
+
+xlocales_tar_source()
+{
+    source="$1"
+
+    for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
+        xlocales_tar_origin "$origin"
+    done
 }
 
 xlocales_diff_origin()
@@ -342,7 +359,7 @@ while : ; do
             xlocales_diff_origin "$1" "$2"
             ;;
 
-        fetch|build)
+        fetch|stage|tar)
             verb="$1"
             shift
             if [ -z "$1" ] ; then
@@ -351,10 +368,9 @@ while : ; do
                 for source_or_origin in $@ ; do
                     case "$source_or_origin" in
                         *[0-9]*) xlocales_${verb}_origin "$source_or_origin"
-				 xlocales_log "$source_or_origin"
-				 ;;
+				                 ;;
                         *)       xlocales_${verb}_source "$source_or_origin"
-				 ;;
+				                 ;;
                     esac
                 done
             fi

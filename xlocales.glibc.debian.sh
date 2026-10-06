@@ -28,7 +28,7 @@ xlocales_debian_codename_for_origin()
 	      cut -d, -f3)"
 
     if [ -z "$codename" ] ; then
-	xlocales_error "xlocales_debian_codename_for_origin: could not find codename for source=$source, version=$version"
+	    xlocales_error "xlocales_debian_codename_for_origin: could not find codename for source=$source, version=$version"
     fi
 
     echo "$codename"
@@ -69,11 +69,13 @@ xlocales_debian_get_package_field()
     cache_file="$xlocales_cache/$origin/$package_name.$package_field"
 
     if [ ! -e "$cache_file" ] ; then
-	awk "BEGIN { in_package = 0; }
-	     /^Package: $package_name\$/ { in_package = 1; }
-	     /^$package_field: / { if (in_package) { gsub(/^[^ ]* /, \"\"); print; } }
-	     /^ *\$/ { in_package = 0; }" < "$packages_file" > "$cache_file.tmp"
-	mv "$cache_file.tmp" "$cache_file"
+	    awk "BEGIN { in_package = 0; }
+	         /^Package: $package_name\$/ { in_package = 1; }
+	         /^$package_field: / { if (in_package) { gsub(/^[^ ]* /, \"\"); print; } }
+	         /^ *\$/ { in_package = 0; }" \
+                 < "$packages_file" \
+                 > "$cache_file.tmp"
+	    mv "$cache_file.tmp" "$cache_file"
     fi
 
     cat "$cache_file"
@@ -182,58 +184,14 @@ xlocales_debian_fetch()
     done
     xlocales_end_status
 
+    rm -f "$src/locales"
     ln -s "usr/share/i18n/locales" "$src/locales"
     echo "$url" > "$src/package.url"
     echo "$package_version" > "$src/package.version"
     echo "$locale_version" > "$src/libc.version"
-    touch "$src/fetch.done"
-    
-    #xlocales_glibc_fetch_common "$origin" \
-	#		                    "usr/share/i18n/locales" \
-	#		                    "charmaps" \
-	#		                    "$package_url" \
-	#		                    "$locale_version" \
-	#		                    "$package_version"
 }
 
-xlocales_debian_diff()
+xlocales_debian_stage()
 {
-    xorigin="$1"
-
-    package_version="$(debian_get_package_field "$origin" \
-    						"locales" \
-						"Version")"
-    locale_version="$(echo "$package_version" | \
-    		      sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
-    upstream="gnu$locale_version"
-    #src="$xlocales_src/$origin"
-    #gnu="$xlocales_src/$upstream"
-
-    xlocales_debian_fetch "$origin"
-    xlocales_gnu_fetch "$upstream"
-
-    src="$xlocales_src/$xorigin"
-    gnu="$xlocales_src/$upstream"
-
-    ls "$src/charmaps" | sort > "$src/charmaps.mine"
-    ls "$gnu/glibc-$locale_version/localedata/charmaps" | sort > "$src/charmaps.upstream"
-    diff -u "$src/charmaps.upstream" "$src/charmaps.mine" || true
-    for x in $(ls "$src/charmaps") ; do
-	diff -u "$gnu/glibc-$locale_version/localedata/charmaps/$x" "$src/charmaps/$x" || true
-    done
-
-    ls "$src/usr/share/i18n/locales" | sort > "$src/locales.mine"
-    ls "$gnu/glibc-$locale_version/localedata/locales" | sort > "$src/locales.upstream"
-    diff -u "$src/locales.upstream" "$src/locales.mine" || true
-    for x in $(ls "$src/usr/share/i18n/locales") ; do
-	if [ -e "$gnu/glibc-$locale_version/localedata/locales/$x" ] ; then
-	    diff -u "$gnu/glibc-$locale_version/localedata/locales/$x" \
-		 "$src/usr/share/i18n/locales/$x" || true
-	fi
-    done
-}
-
-xlocales_debian_build()
-{
-    xlocales_glibc_build "$1"
+    xlocales_glibc_stage "$1"
 }

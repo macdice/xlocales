@@ -13,9 +13,9 @@ LC_IDENTIFICATION "revision" string has been rewritten as follows:
 
 Individual locales can be compiled for the host system with:
 
-  I18NPATH=@prefix@/share/i18n@@origin@/locales \\
-    localedef -f @prefix@/share/i18n@@origin@/charmaps/CHARMAP \\
-              @prefix@/share/i18n@@origin@/locales/LOCALE \\
+  I18NPATH=/@prefix@/share/i18n@@origin@/locales \
+    localedef -f @prefix@/share/i18n@@origin@/charmaps/CHARMAP \
+              @prefix@/share/i18n@@origin@/locales/LOCALE \
               OUTPUT_LOCALE_PATH
 
 Scripts are provided to do that for all locales.  They may be run with
@@ -29,19 +29,19 @@ details:
   installing them under two output directories:
 
   Names with modifiers:       @prefix@/lib/locales@@origin@
-  names without modifiers:    @prefix@/lib/locales.$origin
+  Names without modifiers:    @prefix@/lib/locales.@origin@
 
   The resulting locales can be used in three ways:
 
   1.  Names with modifiers @@origin@, @glibc@libc_version@,
-  @unicode$unicode_version modifiers can be made available to libc by
+  @unicode@unicode_version@ modifiers can be made available to libc by
   adding the first path to the LOCPATH environment variable.
 
   2.  Names without modifiers can be made available to libc, hiding
   system locales of the same name, by adding the second path to
   LOCPATH.
 
-  3.  For an alternative way to find $origin locales without setting
+  3.  For an alternative way to find @origin@ locales without setting
   LOCPATH, see select-locales.sh below.
 
   If DESTDIR is set, it will be prefixed to the install location to

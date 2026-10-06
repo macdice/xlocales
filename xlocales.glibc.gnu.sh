@@ -11,6 +11,10 @@ xlocales_gnu_list()
 
     xlocales_fetch "gnu" "$xlocales_gnu_url/" "$index_file"
     for locale_version in $(sed -n 's/^.*a href="glibc-\([0-9]\.[0-9][0-9]*\)\.tar\.xz".*$/\1/p' < "$index_file" | sort -r -V) ; do
+	    if ! xlocales_version_le "$xlocales_min_libc_version" \
+             "$locale_version" ; then
+	        continue
+	    fi
         echo "gnu$locale_version" "$locale_version"
     done
 }
@@ -19,12 +23,16 @@ xlocales_gnu_fetch()
 {
     origin="$1"
 
-    version="$(xlocales_origin_get_version "$origin")"
     src="$xlocales_src/$origin"
+
+    if [ -e "$src/fetch.done" ] ; then return ; fi
+    
+    version="$(xlocales_origin_get_version "$origin")"
     url="$xlocales_gnu_url/glibc-$version.tar.xz"
     tarball="$xlocales_cache/$origin/glibc-$version.tar.xz"
 
     mkdir -p "$src/build"
+
     xlocales_fetch "$origin" "$url" "$tarball"
 
     xlocales_begin_status "$origin: extracting $src"
@@ -52,8 +60,9 @@ EOF
         xlocales_end_status           
     )
 
-    ln -s "glibc-$version/localedata/locales" "$src/locales"
-    ln -s "glibc-$version/localedata/charmaps" "$src/charmaps"
+    ln -f "glibc-$version/localedata/SUPPORTED" "$src/SUPPORTED"
+    ln -f "glibc-$version/localedata/locales" "$src/locales"
+    ln -f "glibc-$version/localedata/charmaps" "$src/charmaps"
     echo "$url" > "$src/package.url"
     echo "$version" > "$src/package.version"
     echo "$version" > "$src/libc.version"
@@ -67,7 +76,7 @@ EOF
     #                            "$version"
 }
 
-xlocales_gnu_build()
+xlocales_gnu_stage()
 {
-    xlocales_glibc_build "$1"
+    xlocales_glibc_stage "$1"
 }

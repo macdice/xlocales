@@ -61,8 +61,6 @@ xlocales_ubuntu_list()
 	    locale_version="$(echo "$package_version" | \
                           sed 's/^\([0-9]*\.[0-9]*\).*/\1/')"
     
-	    if ! xlocales_libc_version_in_range "$locale_version" ; then continue ; fi
-    
 	    echo "$origin" "$package_version"
     done
 }
@@ -70,4 +68,9 @@ xlocales_ubuntu_list()
 xlocales_ubuntu_fetch()
 {
     xlocales_debian_fetch "$1"
+}
+
+xlocales_ubuntu_stage()
+{
+    xlocales_glibc_stage "$1"
 }
