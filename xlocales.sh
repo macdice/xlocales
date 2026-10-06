@@ -3,6 +3,14 @@
 # An experimental tool for making old versions of locales available,
 # cross-compiled for the host libc, using various naming schemes to
 # identify them.
+#
+# To maximumize the number of systems (distributions x versions x
+# architectures) that can use the same packages without needing a lot
+# of packaging building hosts for different OSes, the packages (.tgz,
+# .deb, .rpm, FreeBSD .pkg) it produces only contain locale source
+# files and shell scripts.  They are compiled with the host's
+# localedef on installation, or in the case of simple tarballs, by
+# running compile-locales.sh manually.  That's a bit wasteful of CPU.
 
 set -e
 
@@ -67,9 +75,9 @@ case "$ID" in
         xlocales_min_libc_version="2.28"
         xlocales_default_source="gnu"
         xlocales_jobs="$(nproc)"
-        xlocales_prefix="/usr"
-        xlocales_infix="lib"
-        xlocales_system_locales="/usr/lib/locale"
+        xlocales_prefix="usr"
+        #xlocales_infix="lib"
+        xlocales_system_locales="usr/lib/locale"
 
         # Guess default type of package without hardcoding distribution names.
         if [ -e "/var/lib/dpkg" ] ; then
@@ -88,6 +96,8 @@ case "$ID" in
                 xlocales_default_source="$module_os"
             fi
         done
+
+        . "$xlocales_script_basename.glibc.sh"
         ;;
 esac
 
@@ -231,7 +241,7 @@ xlocales_fetch_source()
     done
 }
 
-# Fetch and unpack sources from an origin under $xlocales_src/$origin.
+# Fetch and unpack sources under $xlocales_src/$origin.
 #
 # Since glibc systems all have slightly different layout, the fetch
 # routines use symlinks to create a standardised layout like this:
@@ -261,7 +271,9 @@ xlocales_fetch_origin()
         rm -fr "$xlocales_cache/$origin"
     fi
 
-    xlocales_${source}_fetch "$origin"
+    if [ ! -e "$xlocales_source/$origin/fetch.done" ] ; then
+        xlocales_${source}_fetch "$origin"
+    fi
 }
 
 xlocales_build_source()
@@ -270,7 +282,7 @@ xlocales_build_source()
 
     for origin in $(xlocales_${source}_list | cut -d' ' -f1) ; do
         xlocales_build_origin "$origin"
-	xlocales_log "$origin"
+	    xlocales_log "$origin"
     done
 }
 
@@ -279,11 +291,8 @@ xlocales_build_origin()
     origin="$1"
     source="$(xlocales_origin_get_source "$origin")"
 
-    xlocales_fetch_origin "$origin"
-    
-    xlocales_begin_status "$origin: building locales"
-    make -C "$xlocales_src/$origin" -s -j "$xlocales_jobs"
-    xlocales_end_status
+    #xlocales_fetch_origin "$origin"
+    xlocales_${source}_build "$origin"
 }
 
 xlocales_diff_origin()

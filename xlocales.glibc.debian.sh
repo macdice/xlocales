@@ -130,8 +130,8 @@ xlocales_debian_fetch_packages_file()
 xlocales_debian_list()
 {
     for v in $(xlocales_debian_distro_info_for_source "debian" | \
-	       cut -d, -f1 | \
-	       sort -Vr) ; do
+	           cut -d, -f1 | \
+	           sort -Vr) ; do
 	if ! xlocales_version_le "$xlocales_debian_min" "$v" ; then
 	    continue
 	fi
@@ -140,12 +140,10 @@ xlocales_debian_list()
 	xlocales_debian_fetch_packages_file "$origin"
 
 	package_version="$(xlocales_debian_get_package_field "$origin" \
-							     "locales" \
-							     "Version")"
+							                             "locales" \
+							                             "Version")"
 	locale_version="$(echo "$package_version" | \
-			  sed 's/^\([0-9]*\.[0-9]*\).*/\1/')"
-
-	if ! xlocales_libc_version_in_range "$locale_version" ; then continue ; fi
+    			      sed 's/^\([0-9]*\.[0-9]*\).*/\1/')"
 
 	echo "$origin" "$package_version"
     done
@@ -156,43 +154,46 @@ xlocales_debian_fetch()
     origin="$1"
 
     src="$xlocales_src/$origin"
-
-    if [ -e "$src/xlocales.configured" ] ; then return ; fi
-
     package_url="$(xlocales_debian_get_package_url "$origin" "locales")"
     file="$xlocales_cache/$origin/$(basename "$package_url")"
 
     xlocales_fetch "$origin" "$package_url" "$file"
 
     locale_version="$(basename "$package_url" | \
-    		      sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
+    		          sed 's/^[^0-9]*\([0-9]*\.[0-9]*\).*$/\1/')"
     package_version="$(xlocales_debian_get_package_field "$origin" \
-    							 "locales" \
-							 "Version")"
+    							                         "locales" \
+							                             "Version")"
 
-    xlocales_check_libc_version_supported "$locale_version"
-    
     mkdir -p "$src"
     
     xlocales_begin_status "$origin: extracting $file"
     ar --output "$src" x "$file"
     ( cd "$src" ; tar xf data.tar.* )
     cp "$src/usr/share/i18n/SUPPORTED" "$src/supported"
+    xlocales_end_status
+
+    xlocales_begin_status "$origin: extracting charmaps"
     mkdir -p "$src/charmaps"
     for charmap_gz in $(ls "$src/usr/share/i18n/charmaps") ; do
-	charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
-	charmap="$(basename "$charmap_gz" .gz)"
-	gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
+	    charmaps_gz_path="$fakeroot_path/usr/share/i18n/charmaps"
+	    charmap="$(basename "$charmap_gz" .gz)"
+	    gzip -d < "$charmaps_gz_path/$charmap_gz" > "$src/charmaps/$charmap"
     done
     xlocales_end_status
 
-    # defer to the GNU glibc module for the rest
-    xlocales_gnu_configure "$origin" \
-			   "usr/share/i18n/locales" \
-			   "charmaps" \
-			   "$package_url" \
-			   "$locale_version" \
-			   "$package_version"
+    ln -s "usr/share/i18n/locales" "$src/locales"
+    echo "$url" > "$src/package.url"
+    echo "$package_version" > "$src/package.version"
+    echo "$locale_version" > "$src/libc.version"
+    touch "$src/fetch.done"
+    
+    #xlocales_glibc_fetch_common "$origin" \
+	#		                    "usr/share/i18n/locales" \
+	#		                    "charmaps" \
+	#		                    "$package_url" \
+	#		                    "$locale_version" \
+	#		                    "$package_version"
 }
 
 xlocales_debian_diff()
@@ -232,4 +233,7 @@ xlocales_debian_diff()
     done
 }
 
-#
+xlocales_debian_build()
+{
+    xlocales_glibc_build "$1"
+}
