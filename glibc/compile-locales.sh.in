@@ -1,0 +1,113 @@
+#!/bin/sh
+#
+# Compile the locale data from @prefix@/share/i18n/@origin@,
+# and install it in @prefix@/lib/locale@@origin@.
+
+set -e
+
+src_dir="@prefix@/share/i18n@@origin@"
+dst_dir="$DESTDIR@prefix@/lib/locale@@origin@"
+localedef_version="$(localedef --version | head -1)"
+jobs="0"
+
+while [ $# -gt 0 ] ; do
+    case "$1" in
+        -j|--jobs) jobs="\$2"; shift ;;
+        -q|--quiet) is_quiet=1 ;;
+        -n|--dry-run) is_dry=1 ;;
+        *) echo "Usage: $0 [-q|--quiet] [-n|--dry-run] [-j|--jobs JOBS]" >2; exit 1;;
+    esac
+    shift
+done
+
+case "$jobs" in
+    ''|*[!0-9]*) echo "--jobs option requires a positive integer argument" >2
+                 exit 1
+                 ;;
+esac
+
+if which xargs > /dev/null ; then
+    if [ "$jobs" = "0" ] ; then
+        jobs="$(nproc)"
+    fi
+else
+    case "$jobs" in
+        0) jobs="1" ;;
+        1) ;;
+        *) echo "--jobs option only available if GNU xargs (findutils) is installed" >2
+           exit 1
+           ;;
+    fi
+fi
+
+if [ -t 2 ] ; then is_terminal=1 fi
+
+if [ -z "$is_quiet" ] ; then
+    echo "Compiling locale data from @origin@ with $localedef_version"
+fi
+
+if [ -d "$dst_dir" ] ; then
+    if [ -n "$is_dry" ] ; then
+        echo mkdir "$dst_dir"
+    else
+        if [ -z "$is_quiet" ] ; then
+            echo "Creating $dst_dir"
+        fi
+        mkdir "$dst_dir"
+    fi
+done
+
+shell_command='localedef -f "\$2" "\$3" "\$4"'
+if [ -n "$is_dry" ] ; then
+    shell_command="echo $command"
+elif if [ -z "$is_quiet" ] ; then
+    if [ -n "$is_terminal" ] ; then
+        shell_command="printf "%s\r" "$1" ; $command"
+    else
+        shell_command="printf "%s\n" "$1" ; $command"
+    fi
+fi
+
+end_command()
+{
+    if [ -z "$is_quiet" -a -n "$is_terminal" ] ; then
+        printf "\r\033[K"
+    fi
+}
+
+if [ "$jobs" -gt "1" ] ; then
+    while read -r locale locale_src charmap ; do
+        locale_origin="$locale@@origin@"
+        echo "$locale_origin"
+        echo "$src_dir/charmaps/$charmap"
+        echo "$src_dir/$locale_src"
+        echo "$dst_dir/$locale_origin"
+    done | \
+    I18NPATH="$src_dir/locales" xargs -d'\n' -n4 -P"$jobs" -c "$shell_command" sh
+    end_command
+fi
+
+while read -r locale locale_src charmap ; do
+    locale_origin="$locale@@origin@"
+    locale_glibc="$locale@glibc@libc_version@"
+    locale_unicode="$locale@unicode@unicode_version@"
+
+    if [ "$jobs" = "1" ] ; then
+        I18NPATH="$src_dir/locales" sh -c "$shell_command" \
+                                          "sh" \
+                                          "$locale_origin" \
+                                          "$src_dir/charmaps/$charmap" \
+                                          "$src_dir/$locale_src" \
+                                          "$dst_dir/$locale_origin"
+        end_command
+    fi
+    for mod_name in "$locale_glibc" "locale_unicode" ; do
+        if [ -z "$is_dry" ] ; then 
+            rm -f "$dst_dir/$mod_name"
+            ln -s "$locale_origin" "$dst_dir/$mod_name"
+        else
+            echo rm -f "\"$dst_dir/$mod_name\""
+            echo ln -s "\"$locale_origin\" \"$dst_dir/$mod_name\""
+        fi
+    fi
+done

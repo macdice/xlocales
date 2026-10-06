@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# Remove compiled locales from $origin.
+#
+# Target directory: $xlocales_prefix/lib/locales@$origin
+
+set -e
+
+dst_dir="$DESTDIR@prefix@/lib/locales@@origin@"
+
+# XXX search for system dir symlinks and refuse!
+
+echo "removing $dst_dir"
+
+rm -fr "$dst_dir"

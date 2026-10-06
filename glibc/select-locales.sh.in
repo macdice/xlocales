@@ -1,0 +1,50 @@
+#!/bin/sh
+
+set -e
+
+help()
+{
+    echo "Usage: $0 [-q|--quiet] [-n|--dry-run] add|remove @origin|@glibc|@unicode..." >&2
+    exit 1
+}
+
+if [ "$1" == "--dry-run" ] ; then
+    dry_run=1
+fi
+
+case "$1" in
+    add) action="add";;
+    remove) action="remove";;
+    *) help;;
+esac
+shift
+
+# validate arguments up front
+for arg in $@ ; do
+  case "$arg" in
+      @origin|@glibc|@unicode) ;;
+      *) help ;;
+  esac
+done
+
+locale_dir="$DESTDIR@prefix@/lib/locale@@origin@"
+dst_dir="$DESTDIR@system_locale_path@"
+
+if [ -n "$DESTDIR" ] ; then
+    mkdir -p "$dst_dir"
+fi
+
+for arg in $@ ; do
+  case "$arg" in
+      @origin) modifier="@origin@" ;;
+      @glibc) modifer="glibc@locale_version@" ;;
+      @unicode) modifer="unicode@unicode_version@" ;;
+
+    for locale in $(ls "$locale_dir") ; do
+        locale_without_origin="$(echo "$locale" | sed 's/@@origin@$//')"
+        locale_with_modifier="$locale_without_origin@@modifier@"
+        if [ -L "$dst_dir/$locale_with_modifier" ] ; then
+            echo XXX
+        fi
+    done
+done
