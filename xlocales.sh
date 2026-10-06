@@ -14,10 +14,10 @@
 
 set -e
 
-#xlocales_build="build"
-xlocales_stage="stage"
 xlocales_cache="cache"
 xlocales_src="src"
+xlocales_stage="stage"
+xlocales_packages="packages"
 xlocales_jobs="1"
 xlocales_homepage="https://github.com/macdice/xlocales"
 xlocales_maintainer="Thomas Munro <thomas.munro@gmail.com>"
@@ -97,6 +97,7 @@ case "$ID" in
         done
 
         . "$xlocales_script_basename.glibc.sh"
+        . "$xlocales_script_basename.deb.sh"
         ;;
 esac
 
@@ -359,21 +360,24 @@ while : ; do
             xlocales_diff_origin "$1" "$2"
             ;;
 
-        fetch|stage|tar)
+        fetch|stage|deb|tar)
             verb="$1"
             shift
-            if [ -z "$1" ] ; then
-                xlocales_${verb}_source "$xlocales_default_source"
-            else
-                for source_or_origin in $@ ; do
-                    case "$source_or_origin" in
-                        *[0-9]*) xlocales_${verb}_origin "$source_or_origin"
-				                 ;;
-                        *)       xlocales_${verb}_source "$source_or_origin"
-				                 ;;
-                    esac
-                done
-            fi
+            for source_or_origin in $@ ; do                
+                if [ -z "$1" ] ; then
+                    source_or_origin="$xlocales_default_source"
+                fi
+                case "$source_or_origin" in
+                    *[0-9]*)
+                        xlocales_${verb}_origin "$source_or_origin"
+				        ;;
+                    *) 
+                        for origin in $(xlocales_${source_or_origin}_list | \
+                                            cut -d' ' -f1) ; do
+                            xlocales_${verb}_origin "$origin"
+                        done
+                esac
+            done            
             break
             ;;
 

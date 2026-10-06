@@ -60,13 +60,12 @@ EOF
         xlocales_end_status           
     )
 
-    ln -f "glibc-$version/localedata/SUPPORTED" "$src/SUPPORTED"
-    ln -f "glibc-$version/localedata/locales" "$src/locales"
-    ln -f "glibc-$version/localedata/charmaps" "$src/charmaps"
+    ln -s "glibc-$version/localedata/SUPPORTED" "$src/SUPPORTED"
+    ln -s "glibc-$version/localedata/locales" "$src/locales"
+    ln -s "glibc-$version/localedata/charmaps" "$src/charmaps"
     echo "$url" > "$src/package.url"
     echo "$version" > "$src/package.version"
     echo "$version" > "$src/libc.version"
-    touch "$src/fetch.done"
     
     #xlocales_glibc_fetch_common "$origin" \
     #                            "glibc-$version/localedata/locales" \
