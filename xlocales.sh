@@ -296,7 +296,7 @@ xlocales_stage_origin()
         xlocales_fetch_origin "$origin"
     fi
 
-    rm -fr "$xlocales_stage/$origin"
+    #rm -fr "$xlocales_stage/$origin"
     
     source="$(xlocales_origin_get_source "$origin")"
     xlocales_${source}_stage "$origin"

@@ -71,7 +71,8 @@ xlocales_glibc_stage()
     for file in "README" \
                 "compile-locales.sh" \
                 "remove-locales.sh" \
-                "select-locales.sh" ; do
+                "select-modifier.sh" ; do
+        dst="$(echo "$file" | sed 's/(locales|modifier)/$origin/')"
         sed -e "s|@source@|$source|g" \
             -e "s|@origin@|$origin|g" \
             -e "s|@libc_version@|$libc_version|g" \
@@ -83,7 +84,7 @@ xlocales_glibc_stage()
              < "glibc/$file.in" \
              > "$stage/$xlocales_i18n/$file"
         case "$file" in
-            *.sh) chmod +x "$stage/$xlocales_i18n/$file";;
+            *.sh) chmod +x "$stage/$xlocales_i18n/$dst";;
         esac
     done
     xlocales_end_status

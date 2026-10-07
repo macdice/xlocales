@@ -1,15 +1,22 @@
 #!/bin/sh
 #
 # Remove compiled locales from $origin.
-#
-# Target directory: $xlocales_prefix/lib/locales@$origin
 
 set -e
 
-dst_dir="$DESTDIR@prefix@/lib/locales@@origin@"
+system_locale_path="$DESTDIR@system_locale_path@"
 
-# XXX search for system dir symlinks and refuse!
+# Prevent removal if select-modifier.sh has been used to install symlinks
+# in the system locale path.
+for locale in $(ls "$system_locale_path") ; do
+    if [ -L "$system_locale_path/$locale" ] ; then
+        target_dir="$(dirname "$(readlink "$system_locale_path/$locale")")"
+        if [ "$target_dir" = "@prefix@/lib/locales@@origin@" ] ; then
+            echo "Can't remove @prefix@/lib/locales@@origin@ because $system_locale_path/$locale references it; run 'deselect-modifier.sh $(echo "$locale" | sed 's/[^@]*//') first." >&2
+            exit 1
+        fi
+    fi
+done
 
-echo "removing $dst_dir"
-
-rm -fr "$dst_dir"
+rm -fr "$DESTDIR@prefix@/lib/locales@@origin"
+rm -fr "$DESTDIR@prefix@/lib/locales.@origin"
