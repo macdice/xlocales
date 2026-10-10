@@ -1,0 +1,40 @@
+#!/bin/sh
+#
+# Compile the locale data from @prefix@/share/i18n.@origin@.
+# Compiles in parallel if GNU/FreeBSD xargs is available.
+
+set -e
+
+src_dir="$DESTDIR@prefix@/share/i18n@@origin@"
+dst_dir="$DESTDIR@prefix@/lib/locale.@origin@"
+dst_mod_dir="$DESTDIR@prefix@/lib/locale@@origin@"
+
+mkdir -p "$dst_dir"
+mkdir -p "$dst_mod_dir"
+
+if which xargs > /dev/null ; then
+    if which nproc > /dev/null ; then
+        processes="$(nproc)"
+    else
+        processes="$(sysctl -n hw.ncpu)"
+    fi
+    while read -r locale locale_src charmap ; do
+        echo "echo \"Compiling $dst_dir/$locale\" ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+    done < "$src_dir/xlocales.supported" | xargs -P $processes -I {} sh -c '{}'
+else
+    while read -r locale locale_src charmap ; do
+        echo "Compiling $dst_dir/$locale"
+        I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale
+    done < "$src_dir/xlocales.supported"
+fi
+
+while read -r locale locale_src charmap ; do
+    for mod in "@origin@" \
+               "glibc@libc_version@" \
+               "unicode@unicode_version@" ; do
+        if [ ! -L "$dst_mod_dir/$locale@$mod" ] ; then
+            echo "Creating symlink $dst_mod_dir/$locale@$mod"
+            ln -s "../locale.@origin@/$locale" "$dst_mod_dir/$locale@$mod"
+        fi
+    done
+done < "$src_dir/xlocales.supported"

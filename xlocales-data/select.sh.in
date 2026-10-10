@@ -1,0 +1,94 @@
+#!/bin/sh
+#
+# Install or delete symlinks that make locales from @origin@
+# available by default without setting LOCPATH.
+
+set -e
+
+system_locale_path="$DESTDIR@system_locale_path@"
+mod_path="$DESTDIR@prefix@/lib/locale@@origin@"
+
+case "$1" in
+    -d|--delete) shift; delete_mode=1 ;;
+    -h|--help|'')
+        cat <<EOF
+Usage:
+
+Install symlinks under @system_locale_path@ so that locales from
+@prefix@/lib/locale@@origin@ can be accessed by names with modifiers
+beginning @MODIFIER_PREFIX, without setting LOCPATH:
+
+  $0 MODIFIER_PREFIX
+
+To remove symlinks:
+
+  $0 -d MODIFIER_PREFIX
+
+Example MODIFIER_PREFIX values:
+
+  @source@
+  unicode
+  cldr (FreeBSD)
+  glibc (GNU/Linux)
+EOF
+        exit 0
+        ;;
+esac
+
+if [ "$delete_mode" = "1" ] ; then
+    # Delete
+    for mod in $@ ; do
+        for locale in $(ls "$mod_path") ; do
+            case "$locale" in
+                *@$mod*)
+                    if [ -L "$system_locale_path/$locale" ] ; then
+                        target_path="$(readlink "$system_locale_path/$locale")"
+                        if [ "$target_path" = "@prefix@/lib/locale@@origin@/$locale" ] ; then
+                            matched=1
+                            rm "$system_locale_path/$locale"
+                        fi
+                    fi
+                    ;;
+                *)
+                    continue
+                    ;;
+            esac
+        done
+    done
+else
+    # Check for conflicts.
+    for mod in $@ ; do
+        for locale in $(ls "$mod_path") ; do
+            case "$locale" in
+                *@$mod*)
+                    if [ -L "$system_locale_path/$locale" ] ; then
+                        echo "Pre-flight check failed: $system_locale_path/$locale already exists (-> $(readlink "$system_locale_path/$locale"))" >&2
+                        exit 1                        
+                    elif [ -e "$system_locale_path/$locale" ] ; then
+                        echo "Pre-flight check failed: $system_locale_path/$locale already exists" >&2
+                        exit 1
+                    fi
+                    ;;
+            esac
+        done
+    done
+
+    # Cleared to proceed.
+    mkdir -p "$system_locale_path"
+    for mod in $@ ; do
+        for locale in $(ls "$mod_path") ; do
+            case "$locale" in
+                *@$mod*)
+                    matched=1
+                    ln -s "@prefix@/lib/locale@@origin@/$locale" \
+                       "$system_locale_path/$locale"
+                    ;;
+            esac
+        done
+    done
+fi
+
+if [ "$matched" != "1" ] ; then
+    echo "No matching modifiers found" >&2
+    exit 1
+fi
