@@ -1,0 +1,10 @@
+#!/bin/sh
+
+XLOCALES_SOURCE="rocky"
+XLOCALES_RPM_MIN_VERSION=9
+XLOCALES_RPM_REPO_URL1="https://download.rockylinux.org/pub/rocky/@VERSION@/AppStream/x86_64/os"
+XLOCALES_RPM_REPO_URL2="https://dl.rockylinux.org/vault/rocky/@VERSION@/AppStream/x86_64/os"
+XLOCALES_RPM_PACKAGE="glibc-locale-source"
+
+. "./xlocales-get-rpm.sh"
+
