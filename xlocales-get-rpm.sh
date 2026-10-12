@@ -164,7 +164,6 @@ xlocales_get_rpm_maybe_next_major_version()
     esac
 }
 
-#https://dl.rockylinux.org/vault/rocky/8.6/AppStream/x86_64/os/repodata/repomd.xml
 xlocales_get_rpm_list()
 {
     mkdir -p "cache/$XLOCALES_SOURCE"
@@ -178,13 +177,16 @@ xlocales_get_rpm_list()
         while [ -n "$version" ] ; do
             if xlocales_get_rpm_probe_repo "$version" ; then
                 origin="$XLOCALES_SOURCE$version"
-                package_version="%(cat "cache/$origin/package.version")"
-                echo "$origin $package_version"
+                package_version="$(cat "cache/$origin/package.version")"
+	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
+                     "$package_version" ; then
+                    echo "$origin $package_version"
+                fi
                 version="$(xlocales_get_rpm_next_version "$version")"
             else
                 version="$(xlocales_get_rpm_maybe_next_major_version "$version")"
             fi
-        done | sort -rV
+        done
     else
         # Some repos are on a webserver with directory listing
         # enabled, or there is a web page somewhere else that lists
@@ -209,8 +211,11 @@ xlocales_get_rpm_list()
                                  "$repo_dir_file") ; do
                 if xlocales_get_rpm_probe_repo "$version" ; then
                     origin="$XLOCALES_SOURCE$version"
-                    package_version="%(cat "cache/$origin/package.version")"
-                    echo "$origin $package_version"
+                    package_version="$(cat "cache/$origin/package.version")"
+	                if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
+                         "$package_version" ; then
+                        echo "$origin $package_version"
+	                fi
                 fi
             done
         done
