@@ -51,9 +51,9 @@ xlocales_get_debian_package_field()
 # package, by finding and probing the package repository for the given
 # version of Debian (or similar):
 #
-# cache/ORIGIN/locales.url
-# cache/ORIGIN/locales.version
-# cache/ORIGIN/locales.file
+# cache/ORIGIN/package.url
+# cache/ORIGIN/package.version
+# cache/ORIGIN/package.file
 xlocales_get_debian_locales_package_info()
 {
     version="$1"
@@ -136,7 +136,7 @@ xlocales_get_debian_list()
 	    fi
         
         xlocales_get_debian_locales_package_info "$v"
-        package_version="$(cat "cache/$origin/locales.version")"
+        package_version="$(cat "cache/$origin/package.version")"
 
         # Also filter out old glibc versions (the package version is
         # assumed to be a glibc version + patch level stuff from the
@@ -189,7 +189,18 @@ xlocales_get_debian()
 }
     
 case "$1" in
-    list) xlocales_get_debian_list;;
-    "$XLOCALES_SOURCE"*) xlocales_get_debian "$1" "$2";;
-    *) xlocales_get_usage;;
+    list)
+        xlocales_get_debian_list
+        ;;
+    all)
+        for origin in $(xlocales_get_debian_list | cut -d' ' -f1) ; do
+		    xlocales_get_debian "$origin" "$2"
+        done
+        ;;
+    "$XLOCALES_SOURCE"*)
+        xlocales_get_debian "$1" "$2"
+        ;;
+    *)
+        xlocales_get_usage
+        ;;
 esac
