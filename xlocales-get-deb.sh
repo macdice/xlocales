@@ -1,33 +1,55 @@
 #!/bin/sh
 #
-# Fetch and unpack glibc locale data from Debian (or similar).
+# Common code shared by xlocales-get-{debian,ubuntu}.sh.  Doesn't use
+# any Debian tooling, just ar, tar, gzip, curl, so it should run on
+# pretty much anything eg RPM systems.
+#
+# Could probably fetch data from other Debian-derived systems too, if
+# the following conditions are met:
+#
+# 1.  Uses .deb packages in a public repository.
+# 2.  Has a public .csv file listing major versions.
+# 3.  Has a "locales" package built from glibc, that includes
+#     a SUPPORTED file listing the locales to compile in Debian's
+#     format (which is different from upstream glibc SUPPORTED and
+#     normally consumed by Debian's locale-gen script).
+# 4.  Only changes glibc version on major release changes, since this
+#     script always takes the latest package.
+#
+# The following variables must be set before sourcing this script:
+#
+# XLOCALES_SOURCE -- ID according to /etc/os-release
+# XLOCALES_DEB_MIN_VERSION -- lowest OS release to consider (number form)
+# XLOCALES_DEB_INFO_URL -- URL for .csv file listing releases
+# XLOCALES_DEB_REPO_URL1 -- repo to scan
+# XLOCALES_DEB_REPO_URL2 -- repo to scan (ie archives/old releases)
 
 . "./xlocales-utils.sh"
 . "./xlocales-utils-glibc.sh"
 
 # Print the contents of the directory of releases, filtering out
 # unreleased versions (ie sid is not included).
-xlocales_get_debian_distro_info()
+xlocales_get_deb_distro_info()
 {
     file="cache/$XLOCALES_SOURCE/$XLOCALES_SOURCE.csv"
 
-    xlocales_fetch "$XLOCALES_SOURCE" "$XLOCALES_DEBIAN_INFO_URL" "$file"
+    xlocales_fetch "$XLOCALES_SOURCE" "$XLOCALES_DEB_INFO_URL" "$file"
     # filter out title line and lines with no release date...
     grep -E '^[0-9][^,]*,[^,]*,[^,]*,[^,]*,[0-9]' "$file"
 }
 
 # Convert a version like "13" to a codename like "trixie" as required
 # to access package repositories.
-xlocales_get_debian_codename()
+xlocales_get_deb_codename()
 {
     version="$1"
 
-    codename="$(xlocales_get_debian_distro_info | \
+    codename="$(xlocales_get_deb_distro_info | \
 	            grep "^$version[, ]" | \
 	            cut -d, -f3)"
 
     if [ -z "$codename" ] ; then
-	    xlocales_error "could not find codename for $XLOCALES_SOURCE version $version in $XLOCALES_DEBIAN_INFO_URL"
+	    xlocales_error "could not find codename for $XLOCALES_SOURCE version $version in $XLOCALES_DEB_INFO_URL"
     fi
 
     echo "$codename"
@@ -35,7 +57,7 @@ xlocales_get_debian_codename()
 
 # Extract the value of a given field for a given package from a given package file,
 # or an empty string if not found.
-xlocales_get_debian_package_field()
+xlocales_get_deb_package_field()
 {
     packages_file="$1"
     package_name="$2"
@@ -54,7 +76,7 @@ xlocales_get_debian_package_field()
 # cache/ORIGIN/package.url
 # cache/ORIGIN/package.version
 # cache/ORIGIN/package.file
-xlocales_get_debian_locales_package_info()
+xlocales_get_deb_locales_package_info()
 {
     version="$1"
 
@@ -65,17 +87,17 @@ xlocales_get_debian_locales_package_info()
     
     # Figure out if the requested version is in the current or archive
     # repository by scanning "/dists/" (an HTML directory listing).
-	codename="$(xlocales_get_debian_codename "$version")"    
+	codename="$(xlocales_get_deb_codename "$version")"    
     repo_dists1_file="cache/$XLOCALES_SOURCE/repo1.html"
     repo_dists2_file="cache/$XLOCALES_SOURCE/repo2.html"
-    xlocales_fetch "$origin" "$XLOCALES_DEBIAN_REPO_URL1/dists/" "$repo_dists1_file"
-    xlocales_fetch "$origin" "$XLOCALES_DEBIAN_REPO_URL2/dists/" "$repo_dists2_file"
+    xlocales_fetch "$origin" "$XLOCALES_DEB_REPO_URL1/dists/" "$repo_dists1_file"
+    xlocales_fetch "$origin" "$XLOCALES_DEB_REPO_URL2/dists/" "$repo_dists2_file"
     if grep -q ">$codename" "$repo_dists1_file" ; then
-        repo_url="$XLOCALES_DEBIAN_REPO_URL1"
+        repo_url="$XLOCALES_DEB_REPO_URL1"
     elif grep -q ">$codename" "$repo_dists2_file" ; then
-        repo_url="$XLOCALES_DEBIAN_REPO_URL2"
+        repo_url="$XLOCALES_DEB_REPO_URL2"
     else
-        xlocales_error "can't find package repository for $XLOCALES_SOURCE $version ($codename); tried $XLOCALES_DEBIAN_REPO_URL1 and $XLOCALES_DEBIAN_REPO_URL2"
+        xlocales_error "can't find package repository for $XLOCALES_SOURCE $version ($codename); tried $XLOCALES_DEB_REPO_URL1 and $XLOCALES_DEB_REPO_URL2"
     fi
 
     # Figure out if it's in "binary-all" (missing on Ubuntu and older
@@ -103,12 +125,12 @@ xlocales_get_debian_locales_package_info()
 
     # Extract the fields we need.
     xlocales_begin_status "$origin: analysing $packages_file"
-    locales_filename="$(xlocales_get_debian_package_field "$packages_file" \
-                                                          "locales" \
-                                                          "Filename")"
-    locales_version="$(xlocales_get_debian_package_field "$packages_file" \
-                                                         "locales" \
-                                                         "Version")"
+    locales_filename="$(xlocales_get_deb_package_field "$packages_file" \
+                                                       "locales" \
+                                                       "Filename")"
+    locales_version="$(xlocales_get_deb_package_field "$packages_file" \
+                                                      "locales" \
+                                                      "Version")"
     xlocales_end_status
 
     if [ -z "$locales_filename" -o -z "$locales_version" ] ; then
@@ -123,19 +145,19 @@ xlocales_get_debian_locales_package_info()
 
 # Print out a list of version and latest package URLs according to the
 # standard package repository.
-xlocales_get_debian_list()
+xlocales_get_deb_list()
 {
-    for v in $(xlocales_get_debian_distro_info | \
+    for v in $(xlocales_get_deb_distro_info | \
                    sed 's/ LTS,/,/' | \
                    cut -d, -f1 | \
                    sort -Vr) ; do
 
         # Stop when we get to very old Debian/Ubuntu versions.
-	    if ! xlocales_version_le "$XLOCALES_DEBIAN_MIN_VERSION" "$v" ; then
+	    if ! xlocales_version_le "$XLOCALES_DEB_MIN_VERSION" "$v" ; then
             break
 	    fi
         
-        xlocales_get_debian_locales_package_info "$v"
+        xlocales_get_deb_locales_package_info "$v"
         package_version="$(cat "cache/$origin/package.version")"
 
         # Also filter out old glibc versions (the package version is
@@ -149,7 +171,7 @@ xlocales_get_debian_list()
     done   
 }
 
-xlocales_get_debian()
+xlocales_get_deb()
 {
     origin="$1"
     output_dir="$2"
@@ -160,7 +182,7 @@ xlocales_get_debian()
     
     version="$(xlocales_origin_get_version "$origin")"
     
-    xlocales_get_debian_locales_package_info "$version"
+    xlocales_get_deb_locales_package_info "$version"
     package_url="$(cat "cache/$origin/package.url")"
     package_file="cache/$origin/$(cat "cache/$origin/package.file")"
     package_version="$(cat "cache/$origin/package.version")"
@@ -191,15 +213,15 @@ xlocales_get_debian()
     
 case "$1" in
     list)
-        xlocales_get_debian_list
+        xlocales_get_deb_list
         ;;
     all)
-        for origin in $(xlocales_get_debian_list | cut -d' ' -f1) ; do
-		    xlocales_get_debian "$origin" "$2"
+        for origin in $(xlocales_get_deb_list | cut -d' ' -f1) ; do
+		    xlocales_get_deb "$origin" "$2"
         done
         ;;
     "$XLOCALES_SOURCE"*)
-        xlocales_get_debian "$1" "$2"
+        xlocales_get_deb "$1" "$2"
         ;;
     *)
         xlocales_get_usage
