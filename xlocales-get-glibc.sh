@@ -75,7 +75,19 @@ EOF
 }    
     
 case "$1" in
-    list) xlocales_get_glibc_list;;
-    "$XLOCALES_SOURCE"*) xlocales_get_glibc "$1" "$2";;
-    *) xlocales_get_usage;;
+    list)
+        xlocales_get_glibc_list
+        ;;
+    all)
+        for origin in $(xlocales_get_glibc_list | cut -d' ' -f1) ; do
+		    xlocales_get_glibc "$origin" "$2"
+        done
+        ;;
+    "$XLOCALES_SOURCE"*)
+        xlocales_get_glibc "$1" "$2"
+        ;;
+    *)
+        xlocales_get_usage
+        ;;
 esac
+
