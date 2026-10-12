@@ -1,6 +1,4 @@
 #!/bin/sh
-#
-# Compile locales created by xlocales-get-SOURCE.sh.
 
 set -e
 
@@ -13,11 +11,11 @@ Usage: $0 origin input_dir output_dir
 On entry, input_dir must contain a subdirectory i18n.ORIGIN.  On
 success, output_dir will contain two subdirectories:
 
-output_dir/locale.ORIGIN -- unadorned locale names that hide the system
+output_dir/locale.ORIGIN -- unmodified locale names that hide the system
                             locales of the same name if LOCPATH points here
 
-output_dir/locale@ORIGIN -- has symlinks with @ORIGIN and @glibcX.Y
-                            modifiers appened, which can be used in
+output_dir/locale@ORIGIN -- symlinks with @ORIGIN and @glibcX.Y
+                            modifiers appended, which can be used in
                             addition to the system locales if LOCPATH
                             points where
 

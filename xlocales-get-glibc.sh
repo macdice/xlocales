@@ -71,7 +71,8 @@ EOF
     xlocales_stage_glibc "$origin" \
                          "$src/glibc-$version/localedata" \
                          "$output_dir/i18n.$origin" \
-                         "$version"
+                         "$version" \
+                         "$url"
 }    
     
 case "$1" in

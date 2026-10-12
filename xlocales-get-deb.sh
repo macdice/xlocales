@@ -185,7 +185,8 @@ xlocales_get_debian()
     xlocales_stage_glibc "$origin" \
                          "$src/usr/share/i18n" \
                          "$output_dir/i18n.$origin" \
-                         "$package_version"
+                         "$package_version" \
+                         "$package_url"
 }
     
 case "$1" in
