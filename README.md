@@ -108,28 +108,32 @@ built with:
 
     $ ./xlocales-make-deb.sh
 
-It scans share for i18n.ORIGIN directories, and builds two or three
+It scans share for i18n.ORIGIN directories, and builds several
 packages for each ORIGIN that has been fetched and places them under
 deb_packages.  Packages that already exist there are not rebuilt.
 
+There are two ways to install cross-compiled locales.  It can be done
+on installation using these architecture-independent packages:
+
 - xlocales-ORIGIN-data: contains /usr/share/i18n.ORIGIN
 - xlocales-ORIGIN-gen: compiles to /usr/share/locale.ORIGIN on installation
+
+Or it can be done using an architecture- and OS-specific package that
+is only generated if --precompiled is specified:
+
 - xlocales-ORIGIN: contains precompiled locales in /usr/lib/locale.ORIGIN
 
-The second package depends on the first, and can only be installed on
-a system that is using the same glibc version as the ORIGIN system
-that provided the locale data, or newer.  Older localedef versions are
-likely to run into more problems understanding locale data that is
-newer, ie due to syntax changes.  (Problems understanding older locale
-are discussed further down).
+The result is a set of locales in /usr/lib/locale@ORIGIN and
+/usr/lib/locale.ORIGIN, which can be made visible to libc by setting
+the LOCPATH environment variable.  The names in locale@ORIGIN have
+@ORIGIN and @libcX.Y modifiers, and the names in locale.ORIGIN have no
+modifiers, so they hide the system locales of the same name.
 
-xlocales-ORIGIN is only produced if --precompiled is specified, and it
-can only be installed on systems with the same architecture and libc
-version as the host that built it.
+Two optional packages also make the locales visible to all programs by
+default without needing an environment change:
 
-xlocales-ORIGIN-gen is architecture-independent and allows
-installation on newer libc systems, but it much slower to install due
-the deferred compliation step.
+- xlocales-ORIGIN-system: places @ORIGIN symlinks in /usr/lib/locale
+- xlocales-ORIGIN-system-libc: places @libcX.Y symlinks in /usr/lib/locale
 
 XXX TODO: Should produce source packages instead of using dpkg-deb.
 
