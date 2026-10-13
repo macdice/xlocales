@@ -89,10 +89,11 @@ for i18n in $(ls share/) ; do
         mkdir -p "$precomp_stage/usr/lib/locale@$origin"
         while read -r locale locale_src charmap modifiers ; do
             if [ ! -d "$dst_dir/$locale" ] ; then
-                echo "I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+                echo "printf '\r%-79s' '$dst_dir/$locale' ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
             fi
         done < "$src_dir/xlocales.supported" | \
             /usr/bin/xargs -P $(nproc) -I {} sh -c '{}'
+        printf '\r%-79s\r' ''
         while read -r locale locale_src charmap modifiers ; do
             for mod in $modifiers ; do
                 if [ ! -L "$dst_mod_dir/$locale@$mod" ] ; then
