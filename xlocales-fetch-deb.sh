@@ -212,7 +212,7 @@ EOF
     -l|--list)
         source="$2"
         if [ -z "$source" ] ; then
-            ls "./deb_sources"
+            ls -1 "./deb_sources"
         else
             xlocales_get_deb_set_source "$source"        
             xlocales_get_deb_list

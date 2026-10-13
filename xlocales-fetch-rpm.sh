@@ -50,7 +50,6 @@ xlocales_get_rpm_probe_repo()
         XLOCALES_RPM_REPO_URL3="$(sed -n 's|^.*>\(https:[^>]*\)/repodata/repomd\.xml</url.*$|\1|p' < "$metalink_file" | head -3 | tail -1)"
     fi
 
-    #primary_file="cache/$origin/primary.xml.gz"
     repomd_file="cache/$origin/repomd.xml"
 
     if [ -e "cache/$origin/package.file" ] ; then
@@ -60,9 +59,21 @@ xlocales_get_rpm_probe_repo()
         return
     fi
 
-    # We take /usr/share/i18n/{locales,charmaps} from a binary package
-    # so that we now that all patches were already applied and we
-    # don't have to redo any of that.
+    if [ "$XLOCALES_RPM_REPO_DIR_FIND_HIGHEST_MINOR" = "1" ] ; then
+        # OpenSUSE doesn't have a single per-major-version repo.  It
+        # does have a directory though, so find the highest minor
+        # version there.
+        version_extended="$(xlocales_get_rpm_directory 1 | \
+                            grep "^$version\." | \
+                            head -1)"
+        if [ -z "$version_extended" ] ; then
+            false
+            return
+        fi
+    else
+        version_extended="$version"
+    fi
+
     for repo_url in "$XLOCALES_RPM_REPO_URL1" \
                     "$XLOCALES_RPM_REPO_URL2" \
                     "$XLOCALES_RPM_REPO_URL3" \
@@ -76,7 +87,7 @@ xlocales_get_rpm_probe_repo()
         fi
 
         repomd_url="$(xlocales_get_rpm_url "$repo_url" \
-                                           "$version" \
+                                           "$version_extended" \
                                            "repodata/repomd.xml")"
 
         xlocales_begin_status "$origin: fetching $repomd_url"
@@ -93,25 +104,35 @@ xlocales_get_rpm_probe_repo()
         xlocales_error "Fetching $repomd_url failed: $(cat "$repomd_file.log")"
     done
 
-    primary_location="$(sed -n 's|^.*<location href="\([^"]*\.xml\.[^"]*\)".*|\1|p' \
-                            "$repomd_file" | \
-                            head -1)"
+    primary_location="$(grep -i "primary" "$repomd_file" | \
+                        sed -n 's|^.*<location href="\([^"]*\.xml\.[^"]*\)".*|\1|p' | \
+                        head -1)"
+    echo "$primary_location" > /tmp/$origin.location
     if [ -z "$primary_location" ] ; then
         xlocales_error "could not find primary location in $repomd_file, fetched from $repomd_url"
     fi
         
-    primary_url="$(xlocales_get_rpm_url "$repo_url" "$version" "$primary_location")"
-    primary_file="cache/$origin/$(echo "$primary_location" | sed 's|^.*\.|primary.xml.|')"
+    primary_url="$(xlocales_get_rpm_url "$repo_url" \
+                                        "$version_extended" \
+                                        "$primary_location")"
+    primary_file="cache/$origin/$(echo "$primary_location" | \
+                                  sed 's|^.*\.|primary.xml.|')"
     xlocales_fetch "$origin" "$primary_url" "$primary_file"
 
-    package_location="$(xxxcat "$primary_file" | sed -n "s|^.* href=\"\(.*/${XLOCALES_RPM_PACKAGE}-[^\"]*\)\".*$|\1|p" | sort -rV | head -1)"
+    package_location="$(xxxcat "$primary_file" | \
+                        sed -n "s|^.* href=\"\(.*/${XLOCALES_RPM_PACKAGE}-[^\"]*\)\".*$|\1|p" | \
+                        sort -rV | \
+                        head -1)"   
     if [ -z "$package_location" ] ; then
         xlocales_error "could not find $XLOCALES_RPM_PACKAGE in $primary_file, from $primary_url"
     fi
     
-    package_url="$(xlocales_get_rpm_url "$repo_url" "$version" "$package_location")"
+    package_url="$(xlocales_get_rpm_url "$repo_url" \
+                                        "$version_extended" \
+                                        "$package_location")"
     package_file="$(basename "$package_location")"
-    package_version="$(echo "$package_file" | sed "s|^${XLOCALES_RPM_PACKAGE}-||;s|\.[_0-9a-z]*\.rpm$||")"
+    package_version="$(echo "$package_file" | \
+                       sed "s|^${XLOCALES_RPM_PACKAGE}-||;s|\.[_0-9a-z]*\.rpm$||")"
     echo "$package_url" > "cache/$origin/package.url"
     echo "$package_file" > "cache/$origin/package.file"
     echo "$package_version" > "cache/$origin/package.version"
@@ -149,6 +170,31 @@ xlocales_get_rpm_maybe_next_major_version()
             echo ""
             ;;
     esac
+}
+
+xlocales_get_rpm_directory()
+{
+    show_minor="$1"
+
+    dir_number=1
+    for repo_dir_url in "$XLOCALES_RPM_REPO_DIR_URL1" \
+                        "$XLOCALES_RPM_REPO_DIR_URL2" \
+                        "$XLOCALES_RPM_REPO_DIR_URL3" ; do
+        if [ -z "$repo_dir_url" ] ; then
+            break
+        fi
+        repo_dir_file="cache/$XLOCALES_SOURCE/repo_dir$dir_number.html"
+        xlocales_fetch "$XLOCALES_SOURCE" "$repo_dir_url" "$repo_dir_file"
+        for version in $(sed -n "s|^.*${XLOCALES_RPM_REPO_DIR_REGEX}.*|\1|p" \
+                             "$repo_dir_file") ; do
+            if [ "$show_minor" = "1" ] ; then
+                echo "$version"
+            else
+                echo "$version" | cut -d. -f1
+            fi
+        done
+        dir_number=$((dir_number + 1))
+    done | sort -Vr | uniq
 }
 
 xlocales_get_rpm_list()
@@ -191,38 +237,15 @@ xlocales_get_rpm_list()
             fi
         done
     else
-        # XXX Not used yet, just an idea...
-        #
-        # Some repos are on a webserver with directory listing
-        # enabled, or there is a web page somewhere else that lists
-        # them, so we have to schlep the valid versions out of HTML.
-        # XLOCALES_RPM_REPO_DIR_REGEX must be set to an expression
-        # with a single capture, that discards everything else on a
-        # line.  For example: '^.*<a href="\([^"]*\)/".*$'
-        #
-        # The variables XLOCALES_RPM_REPO_URL1..3 are then used to try
-        # to find to find the repomd.xml file, with @VERSION@
-        # replaced.
-        dir_number=1
-        for repo_dir_url in "$XLOCALES_RPM_REPO_DIR_URL1" \
-                            "$XLOCALES_RPM_REPO_DIR_URL2" \
-                            "$XLOCALES_RPM_REPO_DIR_URL3" ; do
-            if [ -z "$repo_dir_url" ] ; then
-                break
+        for version in $(xlocales_get_rpm_directory 0) ; do
+            if xlocales_get_rpm_probe_repo "$version" ; then
+                origin="$XLOCALES_SOURCE$version"
+                package_version="$(cat "cache/$origin/package.version")"
+	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
+                                       "$package_version" ; then
+                    echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
+	            fi
             fi
-            repo_dir_file="cache/$XLOCALES_SOURCE/repo_dir$dir_number.html"
-            xlocale_fetch "$XLOCALES_SOURCE" "$repo_dir_url" "$repo_dir_file"
-            for version in $(sed -n "s|$XLOCALES_RPM_REPO_DIR_REGEX|\1|p" \
-                                 "$repo_dir_file") ; do
-                if xlocales_get_rpm_probe_repo "$version" ; then
-                    origin="$XLOCALES_SOURCE$version"
-                    package_version="$(cat "cache/$origin/package.version")"
-	                if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
-                         "$package_version" ; then
-                        echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
-	                fi
-                fi
-            done
         done
     fi
 }
@@ -304,7 +327,7 @@ EOF
     -l|--list)
         source="$2"
         if [ -z "$source" ] ; then
-            ls "./rpm_sources"
+            ls -1 "./rpm_sources"
         else
             xlocales_get_rpm_set_source "$source"        
             xlocales_get_rpm_list
