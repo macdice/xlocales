@@ -56,6 +56,9 @@ for i18n in $(ls share/) ; do
     gen_package="$local_repo/xlocales-$origin-gen.$package_version.all.deb"
     precomp_package="$local_repo/xlocales-$origin.$package_version.$debian_arch.deb"
 
+    system_package="$local_repo/xlocales-$origin-system.$package_version.all.deb"
+    system_libc_package="$local_repo/xlocales-$origin-system-libc.$package_version.all.deb"
+
     if [ ! -e "$data_package" ] ; then
         data_stage="stage/xlocales-$origin-data"
         rm -fr "$data_stage"
@@ -96,5 +99,33 @@ for i18n in $(ls share/) ; do
                             "$precomp_stage/DEBIAN/control"
 
         dpkg-deb --root-owner-group -b "$precomp_stage" "$precomp_package"
+    fi
+
+    if [ ! -e "$system_package" ] ; then
+        system_stage="stage/xlocales-$origin-system"
+        rm -fr "$system_stage"
+        mkdir -p "$system_stage/DEBIAN"
+        mkdir -p "$system_stage/usr/lib/locale"
+        write_template_file "deb/xlocales-system/control.in" \
+                            "$system_stage/DEBIAN/control"
+        while read -r locale locale_src charmap modifiers ; do
+            ln -s "../locale@$origin/$locale@$origin" \
+               "$system_stage/usr/lib/locale/$locale@$origin"
+        done < "$i18n_dir/xlocales.supported"
+        dpkg-deb --root-owner-group -b "$system_stage" "$system_package"
+    fi
+
+    if [ ! -e "$system_libc_package" ] ; then
+        system_libc_stage="stage/xlocales-$origin-system-libc"
+        rm -fr "$system_libc_stage"
+        mkdir -p "$system_libc_stage/DEBIAN"
+        mkdir -p "$system_libc_stage/usr/lib/locale"
+        write_template_file "deb/xlocales-system-libc/control.in" \
+                            "$system_libc_stage/DEBIAN/control"
+        while read -r locale locale_src charmap modifiers ; do
+            ln -s "../locale@$origin/$locale@libc$libc_version" \
+               "$system_libc_stage/usr/lib/locale/$locale@libc$libc_version"
+        done < "$i18n_dir/xlocales.supported"
+        dpkg-deb --root-owner-group -b "$system_libc_stage" "$system_libc_package"
     fi
 done
