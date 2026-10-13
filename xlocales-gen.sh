@@ -6,7 +6,10 @@ usage()
 {
     cat <<EOF >&2
 
-Usage: $0 origin input_dir output_dir
+Usage: $0 origin [input_dir output_dir]
+
+If not provided, input_dir and output_dir default to share and lib 
+respectively.
 
 On entry, input_dir must contain a subdirectory i18n.ORIGIN.  On
 success, output_dir will contain two subdirectories:
@@ -23,13 +26,21 @@ EOF
     exit 1
 }
 
-if [ $# != 3 ] ; then
-    usage
-fi
-
-origin="$1"
-input_dir="$2"
-output_dir="$3"
+case "$#" in
+	1)
+		origin="$1"
+		input_dir="share"
+		output_dir="lib"
+		;;
+	3)
+		origin="$1"
+		input_dir="$2"
+		output_dir="$3"
+		;;
+	*)
+		usage
+		;;
+esac
 
 src_dir="$input_dir/i18n.$origin"
 dst_dir="$output_dir/locale.$origin"
@@ -39,29 +50,17 @@ if [ ! -e "$src_dir/xlocales.supported" ] ; then
     echo "Input directory does not contain i18n.$origin/xlocales.supported" >&2
     exit 1
 fi
-if [ ! -d "$output_dir" ] ; then
-    echo "Output directory $output_dir does not exist" >&2
-    exit 1
-fi
 
 mkdir -p "$dst_dir"
 mkdir -p "$dst_mod_dir"
 
-if which xargs > /dev/null ; then
-    processes="$(nproc)"
-    while read -r locale locale_src charmap modifiers ; do
-        echo "echo \"Compiling $dst_dir/$locale\" ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
-    done < "$src_dir/xlocales.supported" | xargs -P $processes -I {} sh -c '{}'
-else
-    while read -r locale locale_src charmap modifiers ; do
-        echo "Compiling $dst_dir/$locale"
-        I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale
-    done < "$src_dir/xlocales.supported"
-fi
-
+processes="$(nproc)"
+while read -r locale locale_src charmap modifiers ; do
+    echo "printf '\r%-79s' '$dst_dir/$locale' ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+done < "$src_dir/xlocales.supported" | xargs -P $processes -I {} sh -c '{}'
+printf '\r%-79s\r' ''
 while read -r locale locale_src charmap modifiers ; do
     for mod in $modifiers ; do
-        echo "Creating symlink $dst_mod_dir/$locale@$mod"
         rm -f "$dst_mod_dir/$locale@$mod"
         ln -s "../locale.$origin/$locale" "$dst_mod_dir/$locale@$mod"
     done
