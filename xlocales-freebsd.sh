@@ -1,6 +1,9 @@
 #!/bin/sh
 #
 # Compile historical FreeBSD locale data with the host localedef.
+#
+# XXX Earlier unfinished attempt from before I knew what I really wanted to do,
+# need to redo this...
 
 set -e
 
