@@ -67,18 +67,3 @@ xlocales_version_le()
 {
     printf '%s\n%s\n' "$1" "$2" | sort -V --check=silent
 }
-
-# All xlocales-get-SOURCE.sh scripts have the same usage.
-xlocales_get_usage()
-{
-    cat <<EOF >&2
-
-Usage:
-
-  $0 list: list valid ORIGIN values
-  $0 ORIGIN [OUTPUT_DIR]: fetch from named origin
-
-OUTPUT_DIR defauls to "xlocales-source".
-EOF
-    exit 1
-}

@@ -37,7 +37,7 @@ information appended after "1.0" in the revision string:
     revision="1.0; origin=debian12; unicode=14.0.0; localedata=2.36"
 
 If xlocales-debian11-system-libc and xlocales-debian12-system-libc are
-installed, I can also use @libc modifiers to select between them:
+also installed, I can also use @libc modifiers to select between them:
 
     $ LANG=sv_SE.UTF-8@libc2.31 sort file
     WA
@@ -46,7 +46,7 @@ installed, I can also use @libc modifiers to select between them:
     VB
     WA
 
-If xlocales-debian11 and xlocales-12 are installed without the
+If xlocales-debian11 and xlocales-debian12 are installed without the
 optional extra -system and -system-libc packages, then the
 cross-compiled locales are only visible to libc if I set the LOCPATH
 environment variable.
