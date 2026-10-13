@@ -6,7 +6,21 @@ origin2="$2"
 tmp="tmp.$$"
 
 if [ ! -e "share/i18n.$origin1/.xlocales.libc_version" ] ; then
-    echo "Specify the name of an origin that has been fetched" >&2
+	cat <<EOF >&2
+Usage:
+
+    $0 ORIGIN
+    $0 ORIGIN1 ORIGIN2
+
+Compares the contents of share/i18n.ORIGIN1 and share/i18n.ORIGIN2.
+If only one ORIGIN is given, it is compared against share/i18n.glibcX.Y,
+being the upstream glibc version so that patches applied by distributions
+can be seen.
+
+The origins must already have been fetched with xlocale-fetch-XXX.sh,
+except that glibcX.Y is automatically fetched if necessary with the single
+argument variant.
+EOF
     exit 1
 fi
 
