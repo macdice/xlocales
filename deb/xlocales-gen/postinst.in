@@ -1,0 +1,34 @@
+#!/bin/sh
+
+set -e
+
+case "$1" in
+    configure)
+        src_dir="@prefix@/share/i18n.@origin@"
+        dst_dir="@prefix@/lib/locale.@origin@"
+        dst_mod_dir="@prefix@/lib/locale@@origin@"
+
+        mkdir -p "$dst_dir"
+        mkdir -p "$dst_mod_dir"
+
+        if [ -x /usr/bin/xargs ] ; then
+            while read -r locale locale_src charmap modifiers ; do
+                echo "echo \"Compiling $dst_dir/$locale\" ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+            done < "$src_dir/xlocales.supported" | \
+            /usr/bin/xargs -P $(nproc) -I {} sh -c '{}'
+        else
+            while read -r locale locale_src charmap modifiers ; do
+                echo "Compiling $dst_dir/$locale"
+                I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale
+            done < "$src_dir/xlocales.supported"
+        fi
+        
+        while read -r locale locale_src charmap modifiers ; do
+            for mod in $modifiers ; do
+                echo "Creating symlink $dst_mod_dir/$locale@$mod"
+                rm -f "$dst_mod_dir/$locale@$mod"
+                ln -s "../locale.@origin@/$locale" "$dst_mod_dir/$locale@$mod"
+            done
+        done < "$src_dir/xlocales.supported"
+        ;;
+esac

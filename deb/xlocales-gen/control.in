@@ -1,0 +1,11 @@
+Package: xlocales-@origin@-gen
+Version: @package_version@
+Depends: libc-bin (>= @libc_version@), xlocales-@origin@-data (= @package_version@)
+Conflicts: xlocales-@origin@
+Architecture: all
+Maintainer: Thomas Munro <thomas.munro@gmail.com>
+Homepage: https://github.com/macdice/xlocales
+Description: Locale data from @origin@ compiled at installation
+ Compiling during installation allows a simple non-architecture-specific
+ package, but it a bit slow.  See xlocales-@origin@ for pre-compiled
+ equivalent.

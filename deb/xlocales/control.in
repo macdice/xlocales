@@ -1,0 +1,10 @@
+Package: xlocales-@origin@
+Version: @package_version@
+Depends: libc6 (>= @localedef_version@), libc6 (<< @localedef_version@+)
+Conflicts: xlocales-@origin@-gen
+Architecture: @arch@
+Maintainer: Thomas Munro <thomas.munro@gmail.com>
+Homepage: https://github.com/macdice/xlocales
+Description: Locale data from @origin@, recompiled for @host_origin@
+ See xlocales-@origin@-gen for variant that is not architecture-specific,
+ but compiles on installation instead.
