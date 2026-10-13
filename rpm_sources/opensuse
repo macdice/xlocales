@@ -1,0 +1,8 @@
+XLOCALES_SOURCE="opensuse"
+XLOCALES_RPM_REPO_DIR_FIND_HIGHEST_MINOR="1"
+XLOCALES_RPM_REPO_URL1="https://ftp.gwdg.de/pub/opensuse/discontinued/distribution/leap/@VERSION@/repo/oss"
+XLOCALES_RPM_REPO_URL2="https://download.opensuse.org//download/distribution/leap/@VERSION@/repo/oss"
+XLOCALES_RPM_REPO_DIR_URL1="https://ftp.gwdg.de/pub/opensuse/discontinued/distribution/leap"
+XLOCALES_RPM_REPO_DIR_URL2="https://download.opensuse.org/download/distribution/leap/"
+XLOCALES_RPM_REPO_DIR_REGEX='>\([0-9][0-9]*\.[0-9]*\)/<'
+XLOCALES_RPM_PACKAGE="glibc-i18ndata"
