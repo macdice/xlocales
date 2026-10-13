@@ -1,20 +1,146 @@
 # XLOCALES
 
-This is an experimental attempt to backport locales definitions from older
-releases, currently supporting glibc (including different distributions) and
-FreeBSD.
+This is an experimental attempt to backport locales definitions from
+older releases, currently supporting glibc.  (Technique also works on
+FreeBSD; implementation to follow.)
 
-The short names of OS releases are referred to as "origins", for example
-`debian12`, `rocky10`, `freebsd13.4`.  On glibc systems, the verson of glibc
-that supplied the localedata is referred to as the "version", and on FreeBSD
-systems the CLDR version that was used to generate the `LC_COLLATE` category is
-the "version".
+# Example of usage
 
-## Building everything available
+    $ 
 
-Build all available backported locales, creating subdirectory "build":
+# Fetching glibc locale data
 
-    $ ./xlocales build
+Three scripts are available to fetching glibc locale data from a wide
+range of distributions.
+
+## Fetching directly from gnu.org
+
+See which "origins" are available from gnu.org:
+
+    $ ./xlocales-fetch-glibc.sh --list
+    glibc2.44
+    glibc2.43
+    glibc2.42
+    glibc2.41
+    glibc2.40
+    ...
+
+Fetching from one origin:
+
+    $ ./xlocales-fetch-glibc.sh glibc2.44
+    share/i18n.glibc2.44
+
+The name of a newly created directory is printed, and it contains
+locales and charmaps subdirectories along with some meta-data files
+including xlocales.supported, which controls the combinations of
+locales and codesets that should be produced.
+
+To fetch all available from gnu.org, above a supported minimum, leave
+off the version part:
+
+    $ ./xlocales-fetch-glibc.sh glibc
+    share/i18n.glibc2.44
+    share/i18n.glibc2.43
+    share/i18n.glibc2.42
+    ...
+
+## Fetching from .rpm and .deb-based distributions
+
+These works the same way, except --list by itself now shows available
+sources:
+
+    $ ./xlocales-fetch-deb.sh --list
+    debian
+    ubuntu
+
+    $ ./xlocales-fetch-rpm.sh --list
+    almalinux
+    amzn
+    azurelinux
+    centos
+    fedora
+    opensuse
+    rocky
+
+To see the major versions from one source, and the packages that would
+be used:
+
+    $ ./xlocales-fetch-deb.sh --list debian
+    debian13 (locales 2.41-12+deb13u4)
+    debian12 (locales 2.36-9+deb12u14)
+    debian11 (locales 2.31-13+deb11u11)
+    debian10 (locales 2.28-10+deb10u1)
+
+    $ ./xlocales-fetch-rpm.sh --list rocky
+    rocky9 (glibc-locale-source 2.34-283.el9_8)
+    rocky10 (glibc-locale-source 2.39-142.el10_2)
+
+The configuration for each package repository can be found in the
+deb_sources and rpm_sources directories (patches welcome).
+
+One motivation for using files from distributions instead of gnu.org
+is that they are sometimes patched.  Differences between fetched
+locale data and the corresponding upstream glibc version can be seen
+with:
+
+    $ ./xlocales-diff.sh debian11
+
+Differences between any two origins can be seen by naming them both:
+
+    $ ./xlocales-diff.sh debian11 debian12
+
+# Compiling locales
+
+To compile share/i18n.debian12:
+
+    $ ./xlocales-gen.sh debian12
+
+By default this compiles locales from share/i18n.debian12, and writes
+output to lib/locale.debian12, but the directories can be overridden
+with --input-dir and --output-dir options.
+
+# Building packages
+
+## Debian packages
+
+Packages that should be installable on any .deb-based system can be
+built with:
+
+    $ ./xlocales-make-deb.sh
+
+It scans share for i18n.ORIGIN directories, and builds two or three
+packages for each ORIGIN that has been fetched and places them under
+deb_packages.  Packages that already exist there are not rebuilt.
+
+- xlocales-ORIGIN-data: contains /usr/share/i18n.ORIGIN
+- xlocales-ORIGIN-gen: compiles to /usr/share/locale.ORIGIN on installation
+- xlocales-ORIGIN: contains precompiled locales in /usr/lib/locale.ORIGIN
+
+The second package depends on the first, and can only be installed on
+a system that is using the same glibc version as the ORIGIN system
+that provided the locale data, or newer.  Older localedef versions are
+likely to run into more problems understanding locale data that is
+newer, ie due to syntax changes.  (Problems understanding older locale
+are discussed further down).
+
+xlocales-ORIGIN is only produced if --precompiled is specified, and it
+can only be installed on systems with the same architecture and libc
+version as the host that built it.
+
+xlocales-ORIGIN-gen is architecture-independent and allows
+installation on newer libc systems, but it much slower to install due
+the deferred compliation step.
+
+XXX TODO: Should produce source packages instead of using dpkg-deb.
+
+## RPM packages
+
+XXX TODO Not yet implemented
+
+## FreeBSD packages
+
+XXX TODO Not yet implemented
+
 
 ## Building a subset
 

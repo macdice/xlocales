@@ -4,6 +4,7 @@ origin1="$1"
 origin2="$2"
 
 tmp="tmp.$$"
+trap "rm -fr $tmp" EXIT
 
 if [ ! -e "share/i18n.$origin1/.xlocales.libc_version" ] ; then
 	cat <<EOF >&2

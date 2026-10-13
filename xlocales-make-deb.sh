@@ -14,6 +14,12 @@ host_origin="$ID$VERSION_ID"
 local_repo="deb_packages"
 debian_arch="$(dpkg --print-architecture)"
 
+case "$1" in
+    --precompiled) precompiled_enabled=1 ;;
+    '') ;;
+    *) echo "Bad argument" >&2 ; exit 1 ;;
+esac
+
 mkdir -p "$local_repo"
 
 write_template_file()
@@ -75,7 +81,7 @@ for i18n in $(ls share/) ; do
         dpkg-deb --root-owner-group -b "$gen_stage" "$gen_package"
     fi
 
-    if [ ! -e "$precomp_package" ] ; then
+    if [ "$precompiled_enabled" = "1" -a ! -e "$precomp_package" ] ; then
         precomp_stage="stage/xlocales-$origin"
         localedef_version="$(localedef --version | head -1 | sed 's/^.* //')"
 
