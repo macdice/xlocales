@@ -6,8 +6,8 @@ local_repo="debian_local_repo"
 
 mkdir -p "$local_repo"
 
-for i18n_dir in xlocales-source/i18n.* ; do
-    echo $i18n_dir
+for i18n in $(ls xlocales-source/) ; do
+    i18n_dir="xlocales-source/$i18n"
     origin="$(cat "$i18n_dir/.xlocales.origin")"
     libc_version="$(cat "$i18n_dir/.xlocales.libc_version")"
     package_version="$(cat "$i18n_dir/.xlocales.source_version")"
@@ -27,8 +27,8 @@ for i18n_dir in xlocales-source/i18n.* ; do
     if [ ! -e "$data_package" ] ; then
         data_stage="stage/xlocales-$origin-data"
         rm -fr "$data_stage"
-        mkdir -p "$data_stage/usr/lib"
-        cp -r "$i18n_dir" "$data_stage/usr/lib/"
+        mkdir -p "$data_stage/usr/share"
+        cp -r "$i18n_dir" "$data_stage/usr/share/"
         mkdir "$data_stage/DEBIAN"
         sed -e "s|@package_version@|$package_version|" \
             -e "s|@package_url@|$package_url|" \
@@ -51,13 +51,14 @@ for i18n_dir in xlocales-source/i18n.* ; do
                 -e "s|@libc_version@|$libc_version|" \
                 -e "s|@origin@|$origin|" \
                 -e "s|@maintainer@|$maintainer|" \
+                -e "s|@prefix@|/usr|" \
                 -e "s|@homepage@|https://github.com/macdice/xlocales|" \
                 < "debian/xlocales-gen/$file.in" \
                 > "$gen_stage/DEBIAN/$file"
             case "$file" in
-                *.sh) chmod +x "$data_gen/DEBIAN/$file";;
+                postinst|postrm) chmod +x "$gen_stage/DEBIAN/$file";;
             esac
         done
-        dpkg-deb --root-owner-group -b "$data_gen" "$local_repo/xlocales-$origin-gen.$package_version.all.deb"
+        dpkg-deb --root-owner-group -b "$gen_stage" "$local_repo/xlocales-$origin-gen.$package_version.all.deb"
     fi
 done
