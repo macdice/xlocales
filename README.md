@@ -1,17 +1,74 @@
 # XLOCALES
 
 This is an experimental attempt to backport locales definitions from
-older releases, currently supporting glibc.  (Technique also works on
-FreeBSD; implementation to follow.)
+older releases or different distributions, currently supporting glibc.
+(Technique also works on FreeBSD; implementation to follow.)
 
 # Example of usage
 
-    $ 
+Glibc 2.34 changed weighting of W in Swedish, to make it distinct
+from V, so we can use that for a very simple test:
+
+    $ echo WA > file
+    $ echo VB >> file
+
+According to my Debian 13, glibc 2.41 system, V comes before W:
+
+    $ LANG=sv_SE.UTF-8 sort file
+    VB
+    WA
+
+If xlocales-debian11-system and xlocales-debian12-system are
+installed, I can observe the change by using @debian modifiers:
+
+    $ LANG=sv_SE.UTF-8@debian11 sort file
+    WA
+    VB
+    $ LANG=sv_SE.UTF-8@debian12 sort file
+    VB
+    WA
+
+These locales have only one intentional change made to them by the
+xlocales scripts, other than being compiled with localedef 2.41 for
+consumption by glibc 2.41.  It's the information appended after "1.0"
+here:
+
+    $ LANG=sv_SE.UTF-8@debian12 locale -k LC_IDENTIFICATION | grep revision
+    revision="1.0; origin=debian12; unicode=14.0.0; localedata=2.36"
+
+If xlocales-debian11-system-libc and xlocales-debian12-system-libc are
+installed, I can also use @libc modifiers:
+
+    $ LANG=sv_SE.UTF-8@libc2.31 sort file
+    WA
+    VB
+    $ LANG=sv_SE.UTF-8@libc2.36 sort file
+    VB
+    WA
+
+If xlocales-debian11 and xlocales-12 are installed without the
+optional extra -system and -system-libc packages, then the
+cross-compiled locales are only visible to libc by setting the LOCPATH
+environment variable.
+
+By pointing to locale.ORIGIN, I can use the standard names for locales
+without any modifiers.  In that case, they hide the system locales:
+
+    $ LOCPATH=/usr/lib/locale.debian11 LANG=sv_SE.UTF-8 sort file
+    WA
+    VB
+
+By pointing to locale@ORIGIN, I can use either the @libc or @debian
+modifier, but the normal system locales are not hidden:
+
+    $ LOCPATH=/usr/lib/locale@debian11 LANG=sv_SE.UTF-8@debian11 sort file
+    WA
+    VB
 
 # Fetching glibc locale data
 
-Three scripts are available to fetching glibc locale data from a wide
-range of distributions.
+Three scripts are available to fetching glibc locale data from several
+distributions.
 
 ## Fetching directly from gnu.org
 
