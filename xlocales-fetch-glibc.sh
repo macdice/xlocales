@@ -19,7 +19,7 @@ xlocales_get_glibc_list()
              "$libc_version" ; then
             break
 	    fi
-        echo "glibc$libc_version" "$libc_version"
+        echo "glibc$libc_version"
     done
 }
 

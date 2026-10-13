@@ -145,7 +145,7 @@ xlocales_get_deb_list()
 	        break
 	    fi
         
-        echo "$XLOCALES_SOURCE$v $package_version"
+        echo "$XLOCALES_SOURCE$v (locales $package_version)"
     done   
 }
 

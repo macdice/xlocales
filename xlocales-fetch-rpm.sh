@@ -167,7 +167,7 @@ xlocales_get_rpm_list()
                 package_version="$(cat "cache/$origin/package.version")"
 	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
                      "$package_version" ; then
-                    echo "$origin $package_version"
+                    echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
                 fi
             fi
         done < "$XLOCALES_RPM_REPO_MIRROR_FILE"
@@ -183,7 +183,7 @@ xlocales_get_rpm_list()
                 package_version="$(cat "cache/$origin/package.version")"
 	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
                      "$package_version" ; then
-                    echo "$origin $package_version"
+                    echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
                 fi
                 version="$(xlocales_get_rpm_next_version "$version")"
             else
@@ -219,7 +219,7 @@ xlocales_get_rpm_list()
                     package_version="$(cat "cache/$origin/package.version")"
 	                if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
                          "$package_version" ; then
-                        echo "$origin $package_version"
+                        echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
 	                fi
                 fi
             done
