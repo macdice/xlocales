@@ -168,11 +168,27 @@ xlocales_get_rpm_list()
 {
     mkdir -p "cache/$XLOCALES_SOURCE"
 
-    if [ -z "$XLOCALES_RPM_REPO_DIR_URL1" ] ; then
-        # Some repos have no directory listings.  For lack of anything
-        # better, we'll cycle through major.minor numbers using 404 to
-        # discover the end.  This works for RHEL-style version
-        # counting.
+    if [ -n "$XLOCALES_RPM_REPO_MIRROR_FILE" ] ; then
+        # XXX This was intended to support xlocales-get-amzn.sh but
+        # doesn't actually work from the public internet...
+        while read -r version repo_mirror_url ; do
+            repo_url_file="cache/$XLOCALES_SOURCE/repo_url.$version"
+            xlocales_fetch "$XLOCALES_SOURCE" "$repo_mirror_url" "$repo_url_file"
+            XLOCALES_RPM_REPO_URL1="$(cat "$repo_url_file")"
+            if xlocales_get_rpm_probe_repo "$version" ; then
+                origin="$XLOCALES_SOURCE$version"
+                package_version="$(cat "cache/$origin/package.version")"
+	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
+                     "$package_version" ; then
+                    echo "$origin $package_version"
+                fi
+            fi
+        done < "$XLOCALES_RPM_REPO_MIRROR_FILE"
+    elif [ -z "$XLOCALES_RPM_REPO_DIR_URL1" ] ; then
+        # Cycle through sequential major.minor or major (depending on
+        # whether XLOCALES_RPM_REPO_MIRROR_FILE has a dot in it),
+        # using 404 to discover the end.  This works for RHEL-style
+        # version numbers.
         version="$XLOCALES_RPM_MIN_VERSION"
         while [ -n "$version" ] ; do
             if xlocales_get_rpm_probe_repo "$version" ; then
@@ -188,6 +204,8 @@ xlocales_get_rpm_list()
             fi
         done
     else
+        # XXX Not used yet, just an idea...
+        #
         # Some repos are on a webserver with directory listing
         # enabled, or there is a web page somewhere else that lists
         # them, so we have to schlep the valid versions out of HTML.

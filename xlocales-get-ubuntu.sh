@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# Fetch locale data from Ubuntu locales packages.
 
 XLOCALES_SOURCE="ubuntu"
 XLOCALES_DEB_INFO_URL="https://debian.pages.debian.net/distro-info-data/ubuntu.csv"

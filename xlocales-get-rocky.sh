@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# Fetch locale data from Rocky glibc-locale-source packages.
 
 XLOCALES_SOURCE="rocky"
 XLOCALES_RPM_MIN_VERSION=9

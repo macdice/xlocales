@@ -1,4 +1,6 @@
 #!/bin/sh
+#
+# Fetch locale data from Debian locales packages.
 
 XLOCALES_SOURCE="debian"
 XLOCALES_DEB_MIN_VERSION="10"
