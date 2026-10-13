@@ -202,8 +202,8 @@ xlocales_get_rpm_list()
     mkdir -p "cache/$XLOCALES_SOURCE"
 
     if [ -n "$XLOCALES_RPM_REPO_MIRROR_FILE" ] ; then
-        # XXX This was intended to support xlocales-get-amzn.sh but
-        # doesn't actually work from the public internet...
+		# XXX This was intended to support amzn but doesn't actually work from
+		# the public internet...
         while read -r version repo_mirror_url ; do
             repo_url_file="cache/$XLOCALES_SOURCE/repo_url.$version"
             xlocales_fetch "$XLOCALES_SOURCE" "$repo_mirror_url" "$repo_url_file"
@@ -237,6 +237,7 @@ xlocales_get_rpm_list()
             fi
         done
     else
+        # Scrape a directory index page to find out which versions exist.
         for version in $(xlocales_get_rpm_directory 0) ; do
             if xlocales_get_rpm_probe_repo "$version" ; then
                 origin="$XLOCALES_SOURCE$version"
