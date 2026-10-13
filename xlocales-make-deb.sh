@@ -1,7 +1,7 @@
 #!/bin/sh
 #
 # XXX It would be better to use proper Debian tools and make a source
-# package.
+# package!
 
 set -e
 
@@ -9,6 +9,7 @@ set -e
 
 host_origin="$ID$VERSION_ID"
 local_repo="debian_local_repo"
+debian_arch="$(dpkg --print-architecture)"
 
 mkdir -p "$local_repo"
 
@@ -44,7 +45,7 @@ for i18n in $(ls xlocales-source/) ; do
 
     data_package="$local_repo/xlocales-$origin-data.$package_version.all.deb"
     gen_package="$local_repo/xlocales-$origin-gen.$package_version.all.deb"
-    precomp_package="$local_repo/xlocales-$origin.$package_version.all.deb"
+    precomp_package="$local_repo/xlocales-$origin.$package_version.$debian_arch.deb"
 
     if [ ! -e "$data_package" ] ; then
         data_stage="stage/xlocales-$origin-data"
@@ -75,7 +76,6 @@ for i18n in $(ls xlocales-source/) ; do
         precomp_stage="stage/xlocales-$origin"
         localedef_version="$(localedef --version | head -1 | sed 's/^.* //')"
 
-        debian_arch="$(dpkg --print-architecture)"
         src_dir="xlocales-source/i18n.$origin"
         dst_dir="$precomp_stage/usr/lib/locale.$origin"
         dst_mod_dir="$precomp_stage/usr/lib/locale@$origin"

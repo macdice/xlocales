@@ -1,19 +1,6 @@
 #!/bin/sh
 #
-# Fetch locale data from an RPM repository.  This should be sourced by
-# other xlocales-get-SOURCE.sh scripts that provide the following
-# variables:
-#
-# XLOCALES_SOURCE
-# XLOCALES_RPM_REPO_META_URL1 (optional, for Fedora mirrors)
-# XLOCALES_RPM_REPO_URL1
-# XLOCALES_RPM_REPO_URL2 (optional)
-# XLOCALES_RPM_REPO_URL3 (optional)
-# XLOCALES_RPM_REPO_DIR_URL1 (optional)
-# XLOCALES_RPM_REPO_DIR_URL2 (optional)
-# XLOCALES_RPM_REPO_DIR_URL3 (optional)
-# XLOCALES_RPM_PACKAGE
-# XLOCALES_RPM_MIN_VERSION
+# Fetch locale data from an RPM repository.
 
 set -e
 
@@ -293,19 +280,51 @@ xlocales_get_rpm()
                          "$package_url"
 }
 
+xlocales_get_rpm_set_source()
+{
+    source="$1"
+
+    if [ ! -e "./rpm_sources/$source" ] ; then
+        xlocales_error "Unknown RPM source: $source"
+    fi
+    . "./rpm_sources/$source"
+}
+
 case "$1" in
-    list)
-        xlocales_get_rpm_list
+    ''|help|-h|--help)
+        cat <<EOF >&2
+Usage:
+  $0 --list                list available sources (ie OSes)
+  $0 --list SOURCE         list available origins (ie versions) from SOURCE
+  $0 SOURCE [output_dir]   fetch locale data for all versions of SOURCE
+  $0 ORIGIN [output_dir]   fetch locale data for one version
+EOF
+        exit 1
         ;;
-    all)
-        for origin in $(xlocales_get_rpm_list | cut -d' ' -f1) ; do
-		    xlocales_get_rpm "$origin" "$2"
-        done
+    *[0-9]*)
+        origin="$1"
+        source="$(xlocales_origin_get_source "$origin")"
+        xlocales_get_rpm_set_source "$source"
+        xlocales_get_rpm "$origin" "$2"
+        ;;
+    --list)
+        source="$2"
+        if [ -z "$source" ] ; then
+            ls "./rpm_sources"
+        else
+            xlocales_get_rpm_set_source "$source"        
+            xlocales_get_rpm_list
+        fi
         ;;
     "$XLOCALES_SOURCE"*)
         xlocales_get_rpm "$1" "$2"
         ;;
     *)
-        xlocales_get_usage
+        source="$1"
+        output_dir="$2"
+        xlocales_get_rpm_set_source "$source"        
+        for origin in $(xlocales_get_rpm_list) ; do
+            xlocales_get_rpm "$origin" "$output_dir"
+        done
         ;;
 esac
