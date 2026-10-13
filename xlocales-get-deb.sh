@@ -1,28 +1,6 @@
 #!/bin/sh
 #
-# Common code shared by xlocales-get-{debian,ubuntu}.sh.  Doesn't use
-# any Debian tooling, just ar, tar, gzip, curl, so it should run on
-# pretty much anything eg RPM systems.
-#
-# Could probably fetch data from other Debian-derived systems too, if
-# the following conditions are met:
-#
-# 1.  Uses .deb packages in a public repository.
-# 2.  Has a public .csv file listing major versions.
-# 3.  Has a "locales" package built from glibc, that includes
-#     a SUPPORTED file listing the locales to compile in Debian's
-#     format (which is different from upstream glibc SUPPORTED and
-#     normally consumed by Debian's locale-gen script).
-# 4.  Only changes glibc version on major release changes, since this
-#     script always takes the latest package.
-#
-# The following variables must be set before sourcing this script:
-#
-# XLOCALES_SOURCE -- ID according to /etc/os-release
-# XLOCALES_DEB_MIN_VERSION -- lowest OS release to consider (number form)
-# XLOCALES_DEB_INFO_URL -- URL for .csv file listing releases
-# XLOCALES_DEB_REPO_URL1 -- repo to scan
-# XLOCALES_DEB_REPO_URL2 -- repo to scan (ie archives/old releases)
+# Fetch locale data from an Debian repository.
 
 . "./xlocales-utils.sh"
 . "./xlocales-utils-glibc.sh"
@@ -211,19 +189,48 @@ xlocales_get_deb()
                          "$package_url"
 }
     
+xlocales_get_deb_set_source()
+{
+    source="$1"
+
+    if [ ! -e "./deb_sources/$source" ] ; then
+        xlocales_error "Unknown source: $source"
+    fi
+    . "./deb_sources/$source"
+}
+
 case "$1" in
-    list)
-        xlocales_get_deb_list
+    ''|help|-h|--help)
+        cat <<EOF >&2
+Usage:
+  $0 --list                list available sources (ie OSes)
+  $0 --list SOURCE         list available origins (ie versions) from SOURCE
+  $0 SOURCE [output_dir]   fetch locale data for all versions of SOURCE
+  $0 ORIGIN [output_dir]   fetch locale data for one version
+EOF
+        exit 1
         ;;
-    all)
-        for origin in $(xlocales_get_deb_list | cut -d' ' -f1) ; do
-		    xlocales_get_deb "$origin" "$2"
-        done
+    -l|--list)
+        source="$2"
+        if [ -z "$source" ] ; then
+            ls "./deb_sources"
+        else
+            xlocales_get_deb_set_source "$source"        
+            xlocales_get_deb_list
+        fi
         ;;
-    "$XLOCALES_SOURCE"*)
-        xlocales_get_deb "$1" "$2"
+    *[0-9]*)
+        origin="$1"
+        source="$(xlocales_origin_get_source "$origin")"
+        xlocales_get_deb_set_source "$source"
+        xlocales_get_deb "$origin" "$2"
         ;;
     *)
-        xlocales_get_usage
+        source="$1"
+        output_dir="$2"
+        xlocales_get_deb_set_source "$source"        
+        for origin in $(xlocales_get_deb_list | cut -d' ' -f1) ; do
+            xlocales_get_deb "$origin" "$output_dir"
+        done
         ;;
 esac

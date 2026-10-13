@@ -76,15 +76,24 @@ EOF
 }    
     
 case "$1" in
-    list)
+    ''|help|-h|--help)
+        cat <<EOF >&2
+Usage:
+  $0 --list                list available versions of glibc
+  $0 glibc [output_dir]    fetch locale data for all versions of glibc
+  $0 glibcX.Y [output_dir] fetch locale data for one version of glibc
+EOF
+        exit 1
+        ;;
+    --list)
         xlocales_get_glibc_list
         ;;
-    all)
+    glibc)
         for origin in $(xlocales_get_glibc_list | cut -d' ' -f1) ; do
 		    xlocales_get_glibc "$origin" "$2"
         done
         ;;
-    "$XLOCALES_SOURCE"*)
+    glibc*)
         xlocales_get_glibc "$1" "$2"
         ;;
     *)

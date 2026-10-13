@@ -1,0 +1,6 @@
+XLOCALES_SOURCE="debian"
+XLOCALES_DEB_MIN_VERSION="10"
+XLOCALES_DEB_INFO_URL="https://debian.pages.debian.net/distro-info-data/debian.csv"
+XLOCALES_DEB_REPO_URL1="https://ftp.debian.org/debian"
+XLOCALES_DEB_REPO_URL2="https://archive.debian.org/debian"
+

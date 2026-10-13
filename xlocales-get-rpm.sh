@@ -301,13 +301,7 @@ Usage:
 EOF
         exit 1
         ;;
-    *[0-9]*)
-        origin="$1"
-        source="$(xlocales_origin_get_source "$origin")"
-        xlocales_get_rpm_set_source "$source"
-        xlocales_get_rpm "$origin" "$2"
-        ;;
-    --list)
+    -l|--list)
         source="$2"
         if [ -z "$source" ] ; then
             ls "./rpm_sources"
@@ -316,14 +310,17 @@ EOF
             xlocales_get_rpm_list
         fi
         ;;
-    "$XLOCALES_SOURCE"*)
-        xlocales_get_rpm "$1" "$2"
+    *[0-9]*)
+        origin="$1"
+        source="$(xlocales_origin_get_source "$origin")"
+        xlocales_get_rpm_set_source "$source"
+        xlocales_get_rpm "$origin" "$2"
         ;;
     *)
         source="$1"
         output_dir="$2"
         xlocales_get_rpm_set_source "$source"        
-        for origin in $(xlocales_get_rpm_list) ; do
+        for origin in $(xlocales_get_rpm_list | cut -d' ' -f1) ; do
             xlocales_get_rpm "$origin" "$output_dir"
         done
         ;;
