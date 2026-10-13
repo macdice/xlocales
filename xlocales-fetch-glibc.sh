@@ -3,6 +3,8 @@
 # Fetch upstream GNU glibc sources (ie without any modifications made
 # by GNU/Linux distributions).
 
+set -e
+
 XLOCALES_SOURCE="glibc"
 XLOCALES_GLIBC_URL="https://ftp.gnu.org/gnu/glibc"
 

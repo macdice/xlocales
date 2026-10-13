@@ -1,6 +1,8 @@
 #!/bin/sh
 #
-# Fetch locale data from an Debian repository.
+# Fetch locale data from Debian repository.
+
+set -e
 
 . "./xlocales-utils.sh"
 . "./xlocales-utils-glibc.sh"

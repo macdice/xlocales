@@ -47,7 +47,7 @@ dst_dir="$output_dir/locale.$origin"
 dst_mod_dir="$output_dir/locale@$origin"
 
 if [ ! -e "$src_dir/xlocales.supported" ] ; then
-    echo "Input directory does not contain i18n.$origin/xlocales.supported" >&2
+    echo "$src_dir/i18n.$origin/xlocales.supported not found" >&2
     exit 1
 fi
 
