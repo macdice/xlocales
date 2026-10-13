@@ -1,5 +1,8 @@
 #!/bin/sh
 #
+# Build xlocales-ORIGIN{,-gen,-data} packages for every
+# share/i18n.ORIGIN, if it doesn't exist already.
+#
 # XXX It would be better to use proper Debian tools and make a source
 # package!
 
@@ -8,7 +11,7 @@ set -e
 . /etc/os-release
 
 host_origin="$ID$VERSION_ID"
-local_repo="debian_local_repo"
+local_repo="deb_packages"
 debian_arch="$(dpkg --print-architecture)"
 
 mkdir -p "$local_repo"
@@ -28,8 +31,8 @@ write_template_file()
         < "$1" > "$2"
 }
 
-for i18n in $(ls xlocales-source/) ; do
-    i18n_dir="xlocales-source/$i18n"
+for i18n in $(ls share/) ; do
+    i18n_dir="share/$i18n"
     origin="$(cat "$i18n_dir/.xlocales.origin")"
     libc_version="$(cat "$i18n_dir/.xlocales.libc_version")"
     package_version="$(cat "$i18n_dir/.xlocales.source_version")"
@@ -53,7 +56,7 @@ for i18n in $(ls xlocales-source/) ; do
         mkdir -p "$data_stage/usr/share"
         cp -r "$i18n_dir" "$data_stage/usr/share/"
         mkdir "$data_stage/DEBIAN"
-        write_template_file "debian/xlocales-data/control.in" \
+        write_template_file "deb/xlocales-data/control.in" \
                             "$data_stage/DEBIAN/control"
         dpkg-deb --root-owner-group -b "$data_stage" "$data_package"
     fi
@@ -63,7 +66,7 @@ for i18n in $(ls xlocales-source/) ; do
         rm -fr "$gen_stage"
         mkdir -p "$gen_stage/DEBIAN"
         for file in control postinst postrm ; do
-            write_template_file "debian/xlocales-gen/$file.in" \
+            write_template_file "deb/xlocales-gen/$file.in" \
                                 "$gen_stage/DEBIAN/$file"
             case "$file" in
                 postinst|postrm) chmod +x "$gen_stage/DEBIAN/$file";;
@@ -76,7 +79,7 @@ for i18n in $(ls xlocales-source/) ; do
         precomp_stage="stage/xlocales-$origin"
         localedef_version="$(localedef --version | head -1 | sed 's/^.* //')"
 
-        src_dir="xlocales-source/i18n.$origin"
+        src_dir="share/i18n.$origin"
         dst_dir="$precomp_stage/usr/lib/locale.$origin"
         dst_mod_dir="$precomp_stage/usr/lib/locale@$origin"
 
@@ -98,7 +101,7 @@ for i18n in $(ls xlocales-source/) ; do
             done
         done < "$src_dir/xlocales.supported"
 
-        write_template_file "debian/xlocales/control.in" \
+        write_template_file "deb/xlocales/control.in" \
                             "$precomp_stage/DEBIAN/control"
 
         dpkg-deb --root-owner-group -b "$precomp_stage" "$precomp_package"

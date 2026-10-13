@@ -29,7 +29,7 @@ xlocales_get_glibc()
     output_dir="$2"
 
     if [ -z "$output_dir" ] ; then
-        output_dir="xlocales-source"
+        output_dir="share"
     fi
     
     src="src/$origin"

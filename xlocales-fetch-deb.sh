@@ -152,10 +152,9 @@ xlocales_get_deb_list()
 xlocales_get_deb()
 {
     origin="$1"
-    output_dir="$2"
 
     if [ -z "$output_dir" ] ; then
-        output_dir="xlocales-source"
+        output_dir="share"
     fi
     
     version="$(xlocales_origin_get_version "$origin")"

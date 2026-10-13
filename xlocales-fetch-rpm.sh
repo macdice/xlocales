@@ -233,7 +233,7 @@ xlocales_get_rpm()
     output_dir="$2"
 
     if [ -z "$output_dir" ] ; then
-        output_dir="xlocales-source"
+        output_dir="share"
     fi
     
     version="$(xlocales_origin_get_version "$origin")"
