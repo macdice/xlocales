@@ -1,16 +1,16 @@
-#xlocales_freebsd_tarballs="http://ftp-archive.freebsd.org/pub/FreeBSD-Archive/old-releases/amd64/"
-#xlocales_freebsd_list=
+#!/bin/sh
 
+set -e
+
+XLOCALES_FREEBSD_MIN_VERSION="11.0"
 xlocales_freebsd_release_url="https://api.github.com/repos/freebsd/freebsd-src/tarball/refs/tags/release"
 
-xlocales_freebsd_desc()
-{
-    echo "FreeBSD releases"
-}
+. "./xlocales-utils.sh"
 
-xlocales_freebsd_list()
+
+xlocales_get_freebsd_list()
 {
-    mkdir -p "$xlocales_cache/freebsd"
+    mkdir -p "cache/freebsd"
 
     # FreeBSD has release tarballs on freebsd.org (10.0, 10.1, ...),
     # but not patch-level updates (-p1, -p2, ...) and it seems better
@@ -20,15 +20,15 @@ xlocales_freebsd_list()
     # We could just fetch the list of git tags to find out what is
     # available, but it's remotely possible that they'll be out of
     # sync for short periods, so do the github API paging dance.
-    cache_file_base="$xlocales_cache/freebsd/tarball_list"
+    cache_file_base="cache/freebsd/tarball_list"
     page=1
     while : ; do
 	if [ ! -e "$cache_file_base.contents.$page" ] ; then
 	    url="https://api.github.com/repos/freebsd/freebsd-src/tags?per_page=100&page=$page"
-	    begin_status "Fetching $url"
+	    xlocales_begin_status "Fetching $url"
 	    curl -L -D "$cache_file_base.headers.$page" -f -s -S \
 		 "$url" -o "$cache_file_base.contents.$page.tmp"
-	    end_status
+	    xlocales_end_status
 	    mv "$cache_file_base.contents.$page.tmp" "$cache_file_base.contents.$page"
 	fi
 
@@ -53,38 +53,30 @@ xlocales_freebsd_list()
 	while read -r version full_version ; do
 	    if [ "$version" = "$last_version" ] ; then continue ; fi
 	    last_version="$version"
-	    if ! xlocales_version_le "$xlocales_min_libc_version" "$version" ; then
-		continue
-	    fi
-	    if ! xlocales_version_le "$version" "$xlocales_max_libc_version" ; then
-		continue
+	    if ! xlocales_version_le "$XLOCALES_FREEBSD_MIN_VERSION" "$version" ; then
+		    continue
 	    fi
 	    echo "freebsd$version" "$full_version"
 	done
 }
 
-xlocales_freebsd_fetch()
+xlocales_get_freebsd()
 { 
     origin="$1"
 
-    src="$xlocales_src/$origin"
+    src="src/$origin"
 
-    if [ -e "$src/xlocales.configured" ] ; then
-	return
-    fi
-
-    full_version="$(xlocales_freebsd_list | grep "^$origin " | cut -d' ' -f2)"
+    full_version="$(xlocales_get_freebsd_list | grep "^$origin " | cut -d' ' -f2)"
     if [ -z "$full_version" ] ; then
-	echo "Origin unknown: $origin" >&2
-	exit 1
+	    xlocales_error "Origin unknown: $origin"
     fi
 
-    tarball="$xlocales_cache/$origin/$full_version.tar.gz"
-    fetch_src "$xlocales_freebsd_release_url/$full_version" "$tarball"
+    tarball="cache/$origin/$full_version.tar.gz"
+    xlocales_fetch "$origin" "$xlocales_freebsd_release_url/$full_version" "$tarball"
     mkdir -p "$src"
-    begin_status "Extracting locale data from $tarball"
+    xlocales_begin_status "Extracting locale data from $tarball"
     tar -C "$src" --strip-components 1 -xf "$tarball" \ '*/share/*def*/'
-    end_status
+    xlocales_end_status
 
     
     #for share_dir in $(xlocales_freebsd_dir "$tag" "share") ; do
@@ -108,3 +100,30 @@ xlocales_freebsd_fetch()
     #git -C "$src" checkout --depth 1 "$tag"
     #git clone --filter=blob:none --sparse "$xlocales_freebsd_url" "$src"
 }
+
+case "$1" in
+    ''|help|-h|--help)
+        cat <<EOF >&2
+Usage:
+  $0 --list                  list available origins
+  $0 freebsd [output_dir]    fetch locale data for all versions
+  $0 freebsdX.Y [output_dir] fetch locale data for one version
+EOF
+        exit 1
+        ;;
+    -l|--list)
+        xlocales_get_freebsd_list
+        ;;
+    *[0-9]*)
+        origin="$1"
+        source="$(xlocales_origin_get_source "$origin")"
+        xlocales_get_freebsd "$origin" "$2"
+        ;;
+    *)
+        source="$1"
+        output_dir="$2"
+        for origin in $(xlocales_get_freebsd_list | cut -d' ' -f1) ; do
+            xlocales_get_freebsd "$origin" "$output_dir"
+        done
+        ;;
+esac
