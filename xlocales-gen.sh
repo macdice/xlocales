@@ -54,14 +54,17 @@ fi
 mkdir -p "$dst_dir"
 mkdir -p "$dst_mod_dir"
 
-processes="$(nproc)"
 while read -r locale locale_src charmap modifiers ; do
-    echo "printf '\r%-79s' '$dst_dir/$locale' ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
-done < "$src_dir/xlocales.supported" | xargs -P $processes -I {} sh -c '{}'
-printf '\r%-79s\r' ''
+    if [ ! -d "$dst_dir/$locale" ] ; then
+        echo "printf '\r%-79s' '$dst_dir/$locale' ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+    fi
+done < "$src_dir/xlocales.supported" | xargs -P $(nproc) -I {} sh -c '{}'
 while read -r locale locale_src charmap modifiers ; do
     for mod in $modifiers ; do
-        rm -f "$dst_mod_dir/$locale@$mod"
-        ln -s "../locale.$origin/$locale" "$dst_mod_dir/$locale@$mod"
+        if [ ! -L "$dst_mod_dir/$locale@$mod" ] ; then
+            printf '\r%-79s' "$dst_mod_dir/$locale@$mode"
+            ln -s "../locale.$origin/$locale" "$dst_mod_dir/$locale@$mod"
+        fi
     done
 done < "$src_dir/xlocales.supported"
+printf '\r%-79s\r' ''
