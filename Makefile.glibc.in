@@ -2,69 +2,69 @@ PREFIX ?= @prefix@
 
 SOURCE_PACKAGE_URL := @package_url@
 SOURCE_PACKAGE_FILE := @package_file@
-SOURCE_VERSION := @package_version@
-SOURCE_LIBC := @package_libc_version@
+SOURCE_PACKAGE_VERSION := @package_version@
+SOURCE_LIBC := @libc_version@
 ORIGIN := @origin@
 
 LOCALEDEF_VERSION := $(shell localedef --version | head -1 | sed 's/^.* //')
 LOCALEDEF_VERSION_IS_GE := $(shell printf '$(SOURCE_LIBC)\n$(LOCALEDEF_VERSION)\n' | sort -V --check=silent && echo 'true' || echo 'false')
 
-all: lib/locale.$(ORIGIN).stamp
+all: locale.$(ORIGIN).stamp
 
+# If making directly after fetching ie for a local installation,
+# create a symlink to the cached file.  (If building a source
+# packaged, the package manager should have dumped it here directly
+# already, because we wrapped it to form the upstream source tarball
+# that source packages require.)
 $(SOURCE_PACKAGE_FILE):
-    # If making directly after fetching ie for a local installation,
-    # create a symlink to the cached file it fetched and told us
-    # about.  (If building a source packaged, the package manager
-    # should have dumped it here already, because we wrapped it to
-    # form the upstream source tarball that source packages require.)
-    ln -s $(shell cat "package_cache") $@
+	ln -s "../../cache/$(ORIGIN)/$(SOURCE_PACKAGE_FILE)" $@
 
-localedata:
-    # The extract script creates a symlink to the localedata directory
-    # to tell us where it is.  It should contain
-    # locales/{SUPPORTED,charmaps,locales}.
+localedata: $(SOURCE_PACKAGE_FILE)
 	./xlocales-extract.sh $(SOURCE_PACKAGE_FILE)
-    if [ ! -e localedata -o \
-         ! -e localedata/SUPPORTED -o \
-         ! -e localedata/charmaps -o \
-         ! -e localedata/locales ] ; then \
-        @echo "'localedata' not as expected after extracting $(SOURCE_PACKAGE_FILE)" >&2 \
-        @exit 1 \
-    fi
+	if [ ! -e localedata -o \
+		 ! -e localedata/SUPPORTED -o \
+		 ! -e localedata/charmaps -o \
+		 ! -e localedata/locales ] ; then \
+		echo "localedata not extracted" >&2 ; \
+		exit 1 ; \
+	fi
 
-i18n.$(ORIGIN).stamp: localedata
+unicode_version: localedata
+	sed -n 's/^revision *\"\(.*\)\"$$/\1/p' < localedata/locales/i18n_ctype | head -1 > $@
+
+i18n.$(ORIGIN).stamp: localedata unicode_version
 	mkdir -p i18n.$(ORIGIN)/locales
 	for locale_in in $(shell ls localedata/locales) ; do \
-	   	sed "s/^\(revision *\".*\)\"$$/\1; origin=$(ORIGIN); version=$(PACKAGE_VERSION); unicode=$(UNICODE_VERSION); libc=$(SOURCE_LIBC_VERSION)\"/" \
-        < localedata/locales/$$locale_in \
-        > i18n.$(ORIGIN)/locales/$$locale_in ; \
+		sed "s/^\(revision *\".*\)\"$$/\1; origin=$(ORIGIN); version=$(SOURCE_PACKAGE_VERSION); unicode=$(shell cat unicode_version); libc=$(SOURCE_LIBC)\"/" \
+		< localedata/locales/$$locale_in \
+		> i18n.$(ORIGIN)/locales/$$locale_in ; \
 	done
 	cp -r localedata/charmaps i18n.$(ORIGIN)/
 	touch $@
 
 localedata/SUPPORTED: localedata
 
-i18n.$(ORIGIN)/xlocales.list: localedata/SUPPORTED
-    # Glibc has a makefile fragment:
-    #
-    #   SUPPORTED-LOCALES=\
-    #   aa_DJ.UTF-8/UTF-8 \
-    #   aa_DJ/ISO-8859-1 \
-    #
-    # Debian's locales package has a simplified version:
-    #
-    #   aa_DJ.UTF-8 UTF-8
-    #   aa_DJ ISO-8859-1
-    #
-    # We want a version that has the [.CODESET] part downcased and
-    # dehyphenated, and we want a list of modifier symlinks to create:
-    #
-    #   aa_DJ.utf8 aa_DJ UTF-8 @origin@ libc@libc_version@
-    #   aa_DJ aa_DJ ISO-8859-1 @origin@ libc@libc_version@
-    sed -n 's|^\([^ #][^ /.]*\)\(\.[^ /]*\)\?[ /]\([^ ][^ ]*\).*$|\1(flatten-codeset! \2 ) \1 \3 @origin@ libc@libc_version@|p' < $< | \
-    sed ':a s|\(flatten-codeset! .*\)-\(.* )\)|\L\1\2\E|; ta; s|(flatten-codeset! ||; s| )||' > $@
+# Glibc has a makefile fragment:
+#
+#   SUPPORTED-LOCALES=\
+#   aa_DJ.UTF-8/UTF-8 \
+#   aa_DJ/ISO-8859-1 \
+#
+# Debian's locales package has a simplified version:
+#
+#   aa_DJ.UTF-8 UTF-8
+#   aa_DJ ISO-8859-1
+#
+# Convert both to a form with the [.CODESET] part downcased and
+# dehyphenated, and a trailing list of modifier symlinks:
+#
+#   aa_DJ.utf8 aa_DJ UTF-8 @origin@ libc@libc_version@
+#   aa_DJ aa_DJ ISO-8859-1 @origin@ libc@libc_version@
+i18n.$(ORIGIN)/locales.list: localedata/SUPPORTED
+	sed -n 's|^\([^ #][^ /.]*\)\(\.[^ /]*\)\?[ /]\([^ ][^ ]*\).*$$|\1(flatten-codeset! \2 ) \1 \3 @origin@ libc@libc_version@|p' < $< | \
+	sed ':a s|\(flatten-codeset! .*\)-\(.* )\)|\L\1\2\E|; ta; s|(flatten-codeset! ||; s| )||' > $@
 
-locale.$(ORIGIN).stamp: i18n.$(ORIGIN).stamp
+locale.$(ORIGIN).stamp: i18n.$(ORIGIN).stamp i18n.$(ORIGIN)/locales.list
 	mkdir -p lib
 ifeq ($(LOCALEDEF_VERSION_IS_GE),true)
 	./xlocales-gen.sh $(ORIGIN)
@@ -84,7 +84,7 @@ install: all
 	install -d $(DESTDIR)$(PREFIX)/share/i18n.$(ORIGIN)/locales
 	install -t $(DESTDIR)$(PREFIX)/share/i18n.$(ORIGIN)/locales i18n.$(ORIGIN)/locales/*
 	install -t $(DESTDIR)$(PREFIX)/share/i18n.$(ORIGIN) i18n.$(ORIGIN)/README
-	install -t $(DESTDIR)$(PREFIX)/share/i18n.$(ORIGIN) i18n.$(ORIGIN)/supported
+	install -t $(DESTDIR)$(PREFIX)/share/i18n.$(ORIGIN) i18n.$(ORIGIN)/locales.list
 	install -d $(DESTDIR)$(PREFIX)/lib/locale
 	install -t $(DESTDIR)$(PREFIX)/lib/locale/ locale/*
 	install -d $(DESTDIR)$(PREFIX)/lib/locale.$(ORIGIN)
@@ -100,6 +100,6 @@ clean:
 		locale.$(ORIGIN).stamp \
 		locale@$(ORIGIN) \
 		locale \
-		$(SOURCE_LOCALEDATA) \
+		localedata
 
 .PHONY: all install clean
