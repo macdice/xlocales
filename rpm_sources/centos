@@ -1,4 +1,4 @@
 XLOCALES_SOURCE="centos"
-XLOCALES_RPM_REPO_URL1="https://vault.centos.org/centos/@VERSION@/BaseOS/x86_64/os"
-XLOCALES_RPM_PACKAGE="glibc-locale-source"
+XLOCALES_RPM_REPO_URL1="https://vault.centos.org/centos/@VERSION@/BaseOS/Source"
+XLOCALES_RPM_PACKAGE="glibc"
 XLOCALES_RPM_MIN_VERSION=8

@@ -2,35 +2,11 @@
 
 set -e
 
-usage()
-{
-    cat <<EOF >&2
-
-Usage: $0 origin [input_dir output_dir]
-
-If not provided, input_dir and output_dir default to share and lib 
-respectively.
-
-On entry, input_dir must contain a subdirectory i18n.ORIGIN.  On
-success, output_dir will contain two subdirectories:
-
-output_dir/locale.ORIGIN -- unmodified locale names that hide the system
-                            locales of the same name if LOCPATH points here
-
-output_dir/locale@ORIGIN -- symlinks with @ORIGIN and @glibcX.Y
-                            modifiers appended, which can be used in
-                            addition to the system locales if LOCPATH
-                            points where
-
-EOF
-    exit 1
-}
-
 case "$#" in
 	1)
 		origin="$1"
-		input_dir="share"
-		output_dir="lib"
+		input_dir="."
+		output_dir="."
 		;;
 	3)
 		origin="$1"
@@ -38,7 +14,8 @@ case "$#" in
 		output_dir="$3"
 		;;
 	*)
-		usage
+		echo "Usage: $0 ORIGIN [input_dir output_dir]" >&2
+		exit 1
 		;;
 esac
 
@@ -46,25 +23,22 @@ src_dir="$input_dir/i18n.$origin"
 dst_dir="$output_dir/locale.$origin"
 dst_mod_dir="$output_dir/locale@$origin"
 
-if [ ! -e "$src_dir/xlocales.supported" ] ; then
-    echo "$src_dir/i18n.$origin/xlocales.supported not found" >&2
-    exit 1
-fi
-
 mkdir -p "$dst_dir"
 mkdir -p "$dst_mod_dir"
 
+count="$(wc -l < "$src_dir/locales.list")"
+n=1
 while read -r locale locale_src charmap modifiers ; do
     if [ ! -d "$dst_dir/$locale" ] ; then
-        echo "printf '\r%-79s' '$dst_dir/$locale' ; I18NPATH=$src_dir localedef -f $charmap -i $locale_src $dst_dir/$locale"
+        printf "%s\0%s\0%s\0%s\0%s\0" "[$n/$count] $locale@$origin" "$src_dir" "$charmap" "$locale_src" "$dst_dir/$locale"
     fi
-done < "$src_dir/xlocales.supported" | xargs -P $(nproc) -I {} sh -c '{}'
+    n=$((n + 1))
+done < "$src_dir/locales.list" | xargs -0 -n 5 -P $(nproc) sh -c 'printf "\r%-79s" "$1" ; I18NPATH="$2" localedef -f "$3" -i "$4" "$5"' _
 while read -r locale locale_src charmap modifiers ; do
     for mod in $modifiers ; do
         if [ ! -L "$dst_mod_dir/$locale@$mod" ] ; then
-            printf '\r%-79s' "$dst_mod_dir/$locale@$mode"
             ln -s "../locale.$origin/$locale" "$dst_mod_dir/$locale@$mod"
         fi
     done
-done < "$src_dir/xlocales.supported"
+done < "$src_dir/locales.list"
 printf '\r%-79s\r' ''

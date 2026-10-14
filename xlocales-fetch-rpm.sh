@@ -7,7 +7,7 @@ set -e
 . "./xlocales-utils.sh"
 . "./xlocales-utils-glibc.sh"
 
-xlocales_get_rpm_url()
+xlocales_fetch_rpm_url()
 {
     repo_url="$1"
     version="$2"
@@ -30,7 +30,7 @@ xxxcat()
         *) xlocate_error "I don't know how to decompress $1";;
     esac
 }
-xlocales_get_rpm_probe_repo()
+xlocales_fetch_rpm_probe_repo()
 {
     version="$1"
 
@@ -41,7 +41,7 @@ xlocales_get_rpm_probe_repo()
     if [ -n "$XLOCALES_RPM_REPO_META_URL" ] ; then
         metalink_file="cache/$origin/metalink.xml"
         xlocales_fetch "$origin" \
-                       "$(xlocales_get_rpm_url "$XLOCALES_RPM_REPO_META_URL" \
+                       "$(xlocales_fetch_rpm_url "$XLOCALES_RPM_REPO_META_URL" \
                                                "$version" \
                                                "")" \
                        "$metalink_file"
@@ -63,7 +63,7 @@ xlocales_get_rpm_probe_repo()
         # OpenSUSE doesn't have a single per-major-version repo.  It
         # does have a directory though, so find the highest minor
         # version there.
-        version_extended="$(xlocales_get_rpm_directory 1 | \
+        version_extended="$(xlocales_fetch_rpm_directory 1 | \
                             grep "^$version\." | \
                             head -1)"
         if [ -z "$version_extended" ] ; then
@@ -86,7 +86,7 @@ xlocales_get_rpm_probe_repo()
             return
         fi
 
-        repomd_url="$(xlocales_get_rpm_url "$repo_url" \
+        repomd_url="$(xlocales_fetch_rpm_url "$repo_url" \
                                            "$version_extended" \
                                            "repodata/repomd.xml")"
 
@@ -112,7 +112,7 @@ xlocales_get_rpm_probe_repo()
         xlocales_error "could not find primary location in $repomd_file, fetched from $repomd_url"
     fi
         
-    primary_url="$(xlocales_get_rpm_url "$repo_url" \
+    primary_url="$(xlocales_fetch_rpm_url "$repo_url" \
                                         "$version_extended" \
                                         "$primary_location")"
     primary_file="cache/$origin/$(echo "$primary_location" | \
@@ -127,7 +127,7 @@ xlocales_get_rpm_probe_repo()
         xlocales_error "could not find $XLOCALES_RPM_PACKAGE in $primary_file, from $primary_url"
     fi
     
-    package_url="$(xlocales_get_rpm_url "$repo_url" \
+    package_url="$(xlocales_fetch_rpm_url "$repo_url" \
                                         "$version_extended" \
                                         "$package_location")"
     package_file="$(basename "$package_location")"
@@ -138,7 +138,7 @@ xlocales_get_rpm_probe_repo()
     echo "$package_version" > "cache/$origin/package.version"
 }
 
-xlocales_get_rpm_next_version()
+xlocales_fetch_rpm_next_version()
 {
     version="$1"
 
@@ -154,7 +154,7 @@ xlocales_get_rpm_next_version()
     esac
 }
 
-xlocales_get_rpm_maybe_next_major_version()
+xlocales_fetch_rpm_maybe_next_major_version()
 {
     version="$1"
 
@@ -172,7 +172,7 @@ xlocales_get_rpm_maybe_next_major_version()
     esac
 }
 
-xlocales_get_rpm_directory()
+xlocales_fetch_rpm_directory()
 {
     show_minor="$1"
 
@@ -197,7 +197,7 @@ xlocales_get_rpm_directory()
     done | sort -Vr | uniq
 }
 
-xlocales_get_rpm_list()
+xlocales_fetch_rpm_list()
 {
     mkdir -p "cache/$XLOCALES_SOURCE"
 
@@ -208,7 +208,7 @@ xlocales_get_rpm_list()
             repo_url_file="cache/$XLOCALES_SOURCE/repo_url.$version"
             xlocales_fetch "$XLOCALES_SOURCE" "$repo_mirror_url" "$repo_url_file"
             XLOCALES_RPM_REPO_URL1="$(cat "$repo_url_file")"
-            if xlocales_get_rpm_probe_repo "$version" ; then
+            if xlocales_fetch_rpm_probe_repo "$version" ; then
                 origin="$XLOCALES_SOURCE$version"
                 package_version="$(cat "cache/$origin/package.version")"
 	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
@@ -224,22 +224,22 @@ xlocales_get_rpm_list()
         # version numbers.
         version="$XLOCALES_RPM_MIN_VERSION"
         while [ -n "$version" ] ; do
-            if xlocales_get_rpm_probe_repo "$version" ; then
+            if xlocales_fetch_rpm_probe_repo "$version" ; then
                 origin="$XLOCALES_SOURCE$version"
                 package_version="$(cat "cache/$origin/package.version")"
 	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
                      "$package_version" ; then
                     echo "$origin ($XLOCALES_RPM_PACKAGE $package_version)"
                 fi
-                version="$(xlocales_get_rpm_next_version "$version")"
+                version="$(xlocales_fetch_rpm_next_version "$version")"
             else
-                version="$(xlocales_get_rpm_maybe_next_major_version "$version")"
+                version="$(xlocales_fetch_rpm_maybe_next_major_version "$version")"
             fi
         done
     else
         # Scrape a directory index page to find out which versions exist.
-        for version in $(xlocales_get_rpm_directory 0) ; do
-            if xlocales_get_rpm_probe_repo "$version" ; then
+        for version in $(xlocales_fetch_rpm_directory 0) ; do
+            if xlocales_fetch_rpm_probe_repo "$version" ; then
                 origin="$XLOCALES_SOURCE$version"
                 package_version="$(cat "cache/$origin/package.version")"
 	            if xlocales_version_le "$XLOCALES_GLIBC_MIN_VERSION" \
@@ -251,60 +251,45 @@ xlocales_get_rpm_list()
     fi
 }
 
-xlocales_get_rpm()
+xlocales_fetch_rpm()
 {
     origin="$1"
-    output_dir="$2"
-
-    if [ -z "$output_dir" ] ; then
-        output_dir="share"
-    fi
     
     version="$(xlocales_origin_get_version "$origin")"
     
-    xlocales_get_rpm_probe_repo "$version"
+    xlocales_fetch_rpm_probe_repo "$version"
     package_url="$(cat "cache/$origin/package.url")"
-    package_file="cache/$origin/$(cat "cache/$origin/package.file")"
+    package_file="$(cat "cache/$origin/package.file")"
     package_version="$(cat "cache/$origin/package.version")"
-    xlocales_fetch "$origin" "$package_url" "$package_file"
+    libc_version="$(echo "$package_version" | sed -n 's|\([0-9]*\.[0-9]*\).*|\1|p')"
+    xlocales_fetch "$origin" "$package_url" "cache/$origin/$package_file"
 
     src="src/$origin"
     rm -fr "$src"
     mkdir -p "$src"
 
-    xlocales_begin_status "$origin: extracting $package_file"
-    ( cd "$src" && rpm2cpio "../../$package_file" | cpio -idm --quiet )
-    xlocales_end_status
+    echo "$package_url" > "$src/package.url"
+    echo "$package_file" > "$src/package.file"
+    echo "$package_version" > "$src/package.version"
+    echo "$libc_version" > "$src/package.libc_version"
 
-    xlocales_begin_status "$origin: extracting charmaps"
-    for charmap_gz in $(ls "$src/usr/share/i18n/charmaps") ; do
-        gzip -d "$src/usr/share/i18n/charmaps/$charmap_gz"
-    done
-    xlocales_end_status
-
-    # RHEL-ish systems don't ship the list of locale/charmap
-    # combinations they generate, so fish it out of upstream glibc.
-    # Try to share download cache with the actual glibc script, but
-    # don't build/install anything...
-    libc_version="$(echo "$package_version" | sed 's|^\([0-9]*\.[0-9]*\).*$|\1|')"
-    tarball="glibc-$libc_version.tar.xz"
-    xlocales_fetch "$origin" \
-                   "https://ftp.gnu.org/gnu/glibc/$tarball" \
-                   "cache/glibc$libc_version/$tarball"
-    tar xf \
-        "cache/glibc$libc_version/$tarball" \
-        --strip-components=2 \
-        -C "$src/usr/share/i18n" \
-        "glibc-$libc_version/localedata/SUPPORTED"
+    sed -e "s|@prefix@|/usr|g" \
+        -e "s|@origin@|$origin|g" \
+        -e "s|@package_url@|$package_url|g" \
+        -e "s|@package_file@|$package_file|g" \
+        -e "s|@package_version@|$package_version|g" \
+        -e "s|@libc_version@|$libc_version|g" \
+        < "Makefile.glibc.in" \
+        > "$src/Makefile"
+    cp xlocales-extract-srpm.sh "$src/xlocales-extract.sh"
+    cp xlocales-gen.sh "$src/"
+    cp xlocales-texinfo.sh "$src/"
+    chmod +x "$src"/*.sh
     
-    xlocales_stage_glibc "$origin" \
-                         "$src/usr/share/i18n" \
-                         "$output_dir/i18n.$origin" \
-                         "$package_version" \
-                         "$package_url"
+    echo "$src"
 }
 
-xlocales_get_rpm_set_source()
+xlocales_fetch_rpm_set_source()
 {
     source="$1"
 
@@ -330,22 +315,22 @@ EOF
         if [ -z "$source" ] ; then
             ls -1 "./rpm_sources"
         else
-            xlocales_get_rpm_set_source "$source"        
-            xlocales_get_rpm_list
+            xlocales_fetch_rpm_set_source "$source"        
+            xlocales_fetch_rpm_list
         fi
         ;;
     *[0-9]*)
         origin="$1"
         source="$(xlocales_origin_get_source "$origin")"
-        xlocales_get_rpm_set_source "$source"
-        xlocales_get_rpm "$origin" "$2"
+        xlocales_fetch_rpm_set_source "$source"
+        xlocales_fetch_rpm "$origin" "$2"
         ;;
     *)
         source="$1"
         output_dir="$2"
-        xlocales_get_rpm_set_source "$source"        
-        for origin in $(xlocales_get_rpm_list | cut -d' ' -f1) ; do
-            xlocales_get_rpm "$origin" "$output_dir"
+        xlocales_fetch_rpm_set_source "$source"        
+        for origin in $(xlocales_fetch_rpm_list | cut -d' ' -f1) ; do
+            xlocales_fetch_rpm "$origin" "$output_dir"
         done
         ;;
 esac

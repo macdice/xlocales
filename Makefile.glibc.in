@@ -11,6 +11,8 @@ LOCALEDEF_VERSION_IS_GE := $(shell printf '$(SOURCE_LIBC)\n$(LOCALEDEF_VERSION)\
 
 all: locale.$(ORIGIN).stamp
 
+i18n: i18n.$(ORIGIN).stamp i18n.$(ORIGIN)/locales.list
+
 # If making directly after fetching ie for a local installation,
 # create a symlink to the cached file.  (If building a source
 # packaged, the package manager should have dumped it here directly

@@ -9,7 +9,7 @@ set -e
 
 # Print the contents of the directory of releases, filtering out
 # unreleased versions (ie sid is not included).
-xlocales_get_deb_distro_info()
+xlocales_fetch_deb_distro_info()
 {
     file="cache/$XLOCALES_SOURCE/$XLOCALES_SOURCE.csv"
 
@@ -20,11 +20,11 @@ xlocales_get_deb_distro_info()
 
 # Convert a version like "13" to a codename like "trixie" as required
 # to access package repositories.
-xlocales_get_deb_codename()
+xlocales_fetch_deb_codename()
 {
     version="$1"
 
-    codename="$(xlocales_get_deb_distro_info | \
+    codename="$(xlocales_fetch_deb_distro_info | \
 	            grep "^$version[, ]" | \
 	            cut -d, -f3)"
 
@@ -37,7 +37,7 @@ xlocales_get_deb_codename()
 
 # Extract the value of a given field for a given package from a given package file,
 # or an empty string if not found.
-xlocales_get_deb_package_field()
+xlocales_fetch_deb_package_field()
 {
     packages_file="$1"
     package_name="$2"
@@ -56,7 +56,7 @@ xlocales_get_deb_package_field()
 # cache/ORIGIN/package.url
 # cache/ORIGIN/package.version
 # cache/ORIGIN/package.file
-xlocales_get_deb_locales_package_info()
+xlocales_fetch_deb_locales_package_info()
 {
     version="$1"
 
@@ -67,7 +67,7 @@ xlocales_get_deb_locales_package_info()
     
     # Figure out if the requested version is in the current or archive
     # repository by scanning "/dists/" (an HTML directory listing).
-	codename="$(xlocales_get_deb_codename "$version")"    
+	codename="$(xlocales_fetch_deb_codename "$version")"    
     repo_dists1_file="cache/$XLOCALES_SOURCE/repo1.html"
     repo_dists2_file="cache/$XLOCALES_SOURCE/repo2.html"
     xlocales_fetch "$origin" "$XLOCALES_DEB_REPO_URL1/dists/" "$repo_dists1_file"
@@ -105,10 +105,10 @@ xlocales_get_deb_locales_package_info()
 
     # Extract the fields we need.
     xlocales_begin_status "$origin: analysing $packages_file"
-    locales_filename="$(xlocales_get_deb_package_field "$packages_file" \
+    locales_filename="$(xlocales_fetch_deb_package_field "$packages_file" \
                                                        "locales" \
                                                        "Filename")"
-    locales_version="$(xlocales_get_deb_package_field "$packages_file" \
+    locales_version="$(xlocales_fetch_deb_package_field "$packages_file" \
                                                       "locales" \
                                                       "Version")"
     xlocales_end_status
@@ -123,11 +123,11 @@ xlocales_get_deb_locales_package_info()
     touch "cache/$origin/locales.info"
 }
 
-# Print out a list of version and latest package URLs according to the
-# standard package repository.
-xlocales_get_deb_list()
+# Print out a list of version and latest package version according to
+# the package repository.
+xlocales_fetch_deb_list()
 {
-    for v in $(xlocales_get_deb_distro_info | \
+    for v in $(xlocales_fetch_deb_distro_info | \
                    sed 's/ LTS,/,/' | \
                    cut -d, -f1 | \
                    sort -Vr) ; do
@@ -137,7 +137,7 @@ xlocales_get_deb_list()
             break
 	    fi
         
-        xlocales_get_deb_locales_package_info "$v"
+        xlocales_fetch_deb_locales_package_info "$v"
         package_version="$(cat "cache/$origin/package.version")"
 
         # Also filter out old glibc versions (the package version is
@@ -151,46 +151,45 @@ xlocales_get_deb_list()
     done   
 }
 
-xlocales_get_deb()
+xlocales_fetch_deb()
 {
     origin="$1"
 
-    if [ -z "$output_dir" ] ; then
-        output_dir="share"
-    fi
-    
     version="$(xlocales_origin_get_version "$origin")"
     
-    xlocales_get_deb_locales_package_info "$version"
+    xlocales_fetch_deb_locales_package_info "$version"
     package_url="$(cat "cache/$origin/package.url")"
-    package_file="cache/$origin/$(cat "cache/$origin/package.file")"
+    package_file="$(cat "cache/$origin/package.file")"
     package_version="$(cat "cache/$origin/package.version")"
-    xlocales_fetch "$origin" "$package_url" "$package_file"
+    libc_version="$(echo "$package_version" | sed -n 's|\([0-9]*\.[0-9]*\).*|\1|p')"
+    xlocales_fetch "$origin" "$package_url" "cache/$origin/$package_file"
 
     src="src/$origin"
     rm -fr "$src"
     mkdir -p "$src"
 
-    xlocales_begin_status "$origin: extracting $package_file"
-    ar --output "$src" x "$package_file"
-    ( cd "$src" ; tar xf data.tar.* )
-    mv "$src/usr/share/i18n/SUPPORTED" "$src/usr/share/i18n/supported"
-    xlocales_end_status
+    echo "$package_url" > "$src/package.url"
+    echo "$package_file" > "$src/package.file"
+    echo "$package_version" > "$src/package.version"
+    echo "$libc_version" > "$src/package.libc_version"
 
-    xlocales_begin_status "$origin: extracting charmaps"
-    for charmap_gz in $(ls "$src/usr/share/i18n/charmaps") ; do
-        gzip -d "$src/usr/share/i18n/charmaps/$charmap_gz"
-    done
-    xlocales_end_status
-
-    xlocales_stage_glibc "$origin" \
-                         "$src/usr/share/i18n" \
-                         "$output_dir/i18n.$origin" \
-                         "$package_version" \
-                         "$package_url"
-}
+    sed -e "s|@prefix@|/usr|g" \
+        -e "s|@origin@|$origin|g" \
+        -e "s|@package_url@|$package_url|g" \
+        -e "s|@package_file@|$package_file|g" \
+        -e "s|@package_version@|$package_version|g" \
+        -e "s|@libc_version@|$libc_version|g" \
+        -e "s|@localedata@|usr/share/i18n|g" \
+        < "Makefile.glibc.in" \
+        > "$src/Makefile"
+    cp xlocales-extract-deb.sh "$src/xlocales-extract.sh"
+    cp xlocales-gen.sh "$src/"
+    chmod +x "$src"/*.sh
     
-xlocales_get_deb_set_source()
+    echo "$src"
+}
+
+xlocales_fetch_deb_set_source()
 {
     source="$1"
 
@@ -216,22 +215,22 @@ EOF
         if [ -z "$source" ] ; then
             ls -1 "./deb_sources"
         else
-            xlocales_get_deb_set_source "$source"        
-            xlocales_get_deb_list
+            xlocales_fetch_deb_set_source "$source"        
+            xlocales_fetch_deb_list
         fi
         ;;
     *[0-9]*)
         origin="$1"
         source="$(xlocales_origin_get_source "$origin")"
-        xlocales_get_deb_set_source "$source"
-        xlocales_get_deb "$origin" "$2"
+        xlocales_fetch_deb_set_source "$source"
+        xlocales_fetch_deb "$origin" "$2"
         ;;
     *)
         source="$1"
         output_dir="$2"
-        xlocales_get_deb_set_source "$source"        
-        for origin in $(xlocales_get_deb_list | cut -d' ' -f1) ; do
-            xlocales_get_deb "$origin" "$output_dir"
+        xlocales_fetch_deb_set_source "$source"        
+        for origin in $(xlocales_fetch_deb_list | cut -d' ' -f1) ; do
+            xlocales_fetch_deb "$origin"
         done
         ;;
 esac

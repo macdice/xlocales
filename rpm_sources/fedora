@@ -1,4 +1,4 @@
 XLOCALES_SOURCE="fedora"
-XLOCALES_RPM_REPO_META_URL="https://mirrors.fedoraproject.org/metalink?repo=fedora-@VERSION@&arch=x86_64"
-XLOCALES_RPM_PACKAGE="glibc-locale-source"
-XLOCALES_RPM_MIN_VERSION=26
+XLOCALES_RPM_REPO_META_URL="https://mirrors.fedoraproject.org/metalink?repo=fedora-source-@VERSION@"
+XLOCALES_RPM_PACKAGE="glibc"
+XLOCALES_RPM_MIN_VERSION=31

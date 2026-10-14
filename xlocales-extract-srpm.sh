@@ -10,13 +10,15 @@
 # distros don't include the SUPPORTED file so we have to jump through
 # this extra hoop.
 #
-# Trying to grok RPM spec syntax with a shell script would be a bit
-# fragile, so we'll need the rpm tools as a build dependency to
-# package this on a non-RPM system.
+# XXX Would it be better to use glibc-locale-source for the locale
+# data, and just get SUPPORTED from the (patched) glibc source RPM?
+
+set -e
 
 file="$1"
 
-tmp="$(pwd)/rpmbuild_tmp"
+top="$(pwd)"
+tmp="$top/rpmbuild_tmp"
 spec="$tmp/SPECS/glibc.spec"
 
 rm -fr "$tmp"
@@ -25,25 +27,29 @@ for dir in SOURCES BUILD SPECS ; do
     mkdir -p "$tmp/$dir"
 done
 
-rpm --quiet -iv --define "_topdir $tmp" "$file"
+rpm --quiet -iv --define "_topdir $tmp" --dbpath "$tmp" "$file"
+
+# At least one distro has zero-sized ".nopatch" files listed as
+# patches in the spec, which modern unpatched rpmbuild rejects.
+# Comment them out!
+for emptypatch in $(cd "$tmp/SOURCES" && \
+                    find . -name '*.nopatch' -size 0 | \
+                    sed 's|^./||') ; do
+    sed "s|^\(Patch.*:[[:space:]]*$emptypatch\)|# \1 # illegal empty patch|" \
+        "$spec" > "$spec.tmp"
+    mv "$spec.tmp" "$spec"
+done
+
 rpmbuild --quiet -bp --nodeps --quiet --define "_topdir $tmp" "$spec"
 
-src_dir="$(sed -n 's|%.* \(glibc-.*\)$|\1|p' "$spec" | head -1)"
-if [ -z "$src_dir" ] ; then
-    echo "couldn't find source directory in $spec" >&2
-    exit 1
-fi
+src_dir="$(dirname $(find "$tmp" -name "configure" | head -1))"
+build="$(dirname "$src_dir")"
 
-# Avoid complaints about missing tools that will never be used...
-export MAKEINFO="$tmp/dummy_makeinfo"
-echo "#!/bin/sh" > "$MAKEINFO"
-echo "echo 'GNU texinfo.dummy 7.3'" >> "$MAKEINFO"
-chmod +x "$MAKEINFO"
+echo "Source directory: $src_dir"
+echo "Build directory: $build"
 
-mkdir "$tmp/BUILD/$src_dir-build/tmp"
-(
-    cd "$tmp/BUILD/$glibc_src-build/tmp"
-    ../"$src_dir"/configure --quiet --prefix=/tmp/dummy --srcdir="../$src_dir" --disable-sanity-checks
-)
+mkdir "$build/tmp"
+cd "$build/tmp"
+"$src_dir"/configure --quiet --prefix=/tmp/dummy --srcdir="$src_dir" --disable-sanity-checks MAKEINFO="$top/xlocales-texinfo.sh"
 
-ln -s "$tmp/BUILD/$src_dir-build/$src_dir/localedata" "localedata"
+ln -s "$src_dir/localedata" "$top/localedata"

@@ -11,7 +11,7 @@ XLOCALES_GLIBC_URL="https://ftp.gnu.org/gnu/glibc"
 . "./xlocales-utils.sh"
 . "./xlocales-utils-glibc.sh"
 
-xlocales_get_glibc_list()
+xlocales_fetch_glibc_list()
 {
     index_file="cache/$XLOCALES_SOURCE/index.html"
 
@@ -25,22 +25,39 @@ xlocales_get_glibc_list()
     done
 }
 
-xlocales_get_glibc()
+xlocales_fetch_glibc()
 {
     origin="$1"
-    output_dir="$2"
-
-    if [ -z "$output_dir" ] ; then
-        output_dir="share"
-    fi
-    
-    src="src/$origin"
 
     version="$(xlocales_origin_get_version "$origin")"
-    url="$XLOCALES_GLIBC_URL/glibc-$version.tar.xz"
-    tarball="cache/$origin/glibc-$version.tar.xz"
 
-    mkdir -p "$src/build"
+    package_url="$XLOCALES_GLIBC_URL/glibc-$version.tar.xz"
+    package_file="glibc-$version.tar.xz"
+
+    src="src/$origin"
+    rm -fr "$src"
+    mkdir -p "$src"
+
+    echo "$package_url" > "$src/package.url"
+    echo "$package_file" > "$src/package.file"
+    echo "$version" > "$src/package.version"
+    xlocales_fetch "$origin" "$url" "cache/$origin/$tarball"
+    
+    sed -e "s|@prefix@|/usr|g" \
+        -e "s|@origin@|$origin|g" \
+        -e "s|@package_url@|$package_url|g" \
+        -e "s|@package_file@|$package_file|g" \
+        -e "s|@package_version@|$version|g" \
+        -e "s|@libc_version@|$version|g" \
+        < "Makefile.glibc.in" \
+        > "$src/Makefile"
+    cp xlocales-extract-glibc.sh "$src/xlocales-extract.sh"
+    cp xlocales-gen.sh "$src/"
+    cp xlocales-texinfo.sh "$src/"
+    chmod +x "$src"/*.sh
+
+    echo "$src"
+    return
 
     xlocales_fetch "$origin" "$url" "$tarball"
 
@@ -88,15 +105,15 @@ EOF
         exit 1
         ;;
     --list)
-        xlocales_get_glibc_list
+        xlocales_fetch_glibc_list
         ;;
     glibc)
-        for origin in $(xlocales_get_glibc_list | cut -d' ' -f1) ; do
-		    xlocales_get_glibc "$origin" "$2"
+        for origin in $(xlocales_fetch_glibc_list | cut -d' ' -f1) ; do
+		    xlocales_fetch_glibc "$origin" "$2"
         done
         ;;
     glibc*)
-        xlocales_get_glibc "$1" "$2"
+        xlocales_fetch_glibc "$1" "$2"
         ;;
     *)
         xlocales_get_usage
