@@ -4,3 +4,5 @@ XLOCALES_RPM_REPO_URL1="https://packages.microsoft.com/yumrepos/azurelinux-@VERS
 XLOCALES_RPM_REPO_URL2="https://packages.microsoft.com/yumrepos/cbl-mariner-@VERSION@-prod-base-srpms"
 XLOCALES_RPM_PACKAGE="glibc"
 
+# Comment out the zero-size ".nopatch" patches, as standard rpmbuild rejects them
+XLOCALES_RPM_SPEC_SED="s|^\(Patch.*:[[:space:]].*\.nopatch\)|# \1 # empty patch!|"

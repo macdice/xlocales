@@ -29,18 +29,15 @@ done
 
 rpm --quiet -iv --define "_topdir $tmp" --dbpath "$tmp" "$file"
 
-# At least one distro has zero-sized ".nopatch" files listed as
-# patches in the spec, which modern unpatched rpmbuild rejects.
-# Comment them out!
-for emptypatch in $(cd "$tmp/SOURCES" && \
-                    find . -name '*.nopatch' -size 0 | \
-                    sed 's|^./||') ; do
-    sed "s|^\(Patch.*:[[:space:]]*$emptypatch\)|# \1 # illegal empty patch|" \
-        "$spec" > "$spec.tmp"
+# A chance for some light per-source editing of the spec file...
+if [ -e "spec.sed" ] ; then
+    sed "$(cat "spec_sed")" < "$spec" > "$spec.tmp"
     mv "$spec.tmp" "$spec"
-done
+fi
 
-rpmbuild --quiet -bp --nodeps --quiet --define "_topdir $tmp" "$spec"
+rpmbuild --quiet -bp --nodeps --quiet \
+         --define "_topdir $tmp" \
+         "$spec"
 
 src_dir="$(dirname $(find "$tmp" -name "configure" | head -1))"
 build="$(dirname "$src_dir")"

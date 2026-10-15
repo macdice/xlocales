@@ -92,7 +92,7 @@ xlocales_fetch_rpm_probe_repo()
 
         xlocales_begin_status "$origin: fetching $repomd_url"
         echo "$repomd_url" > "$repomd_file.log"
-        curl -f -s -S -o "$repomd_file" "$repomd_url" 2>> "$repomd_file.log" || true
+        curl -L -f -s -S -o "$repomd_file" "$repomd_url" 2>> "$repomd_file.log" || true
         xlocales_end_status
 
         if [ -e "$repomd_file" ] ; then
@@ -281,6 +281,13 @@ xlocales_fetch_rpm()
         -e "s|@libc_version@|$libc_version|g" \
         < "Makefile.glibc.in" \
         > "$src/Makefile"
+
+    if [ -n "$XLOCALES_RPM_SPEC_SED" ] ; then
+        # XXX it's a bit hard to pass a sed command to
+        # xlocales-extract-srpm.sh.in via sed replacement... pass this
+        # with a file instead
+        echo "$XLOCALES_RPM_SPEC_SED" > "$src/spec.sed"
+    fi
     cp xlocales-extract-srpm.sh "$src/xlocales-extract.sh"
     cp xlocales-gen.sh "$src/"
     cp xlocales-texinfo.sh "$src/"
